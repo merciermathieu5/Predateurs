@@ -1,0 +1,1575 @@
+/* Harnais de validation — Predators de Nashville (jsdom) */
+const fs = require('fs');
+const path = require('path');
+const {JSDOM} = require('jsdom');
+
+let total = 0, echecs = 0;
+function ok(cond, msg){
+  total++;
+  if (!cond){ echecs++; console.error('  ✗ ' + msg); }
+}
+function egal(a, b, msg){ ok(a===b, msg + ` (obtenu: ${JSON.stringify(a)}, attendu: ${JSON.stringify(b)})`); }
+function proche(a, b, tol, msg){ ok(a!==null && a!==undefined && Math.abs(a-b)<=tol, msg + ` (obtenu: ${a}, attendu: ~${b})`); }
+function tableauEgal(a, b, msg){ ok(JSON.stringify(a)===JSON.stringify(b), msg + ` (obtenu: ${JSON.stringify(a)}, attendu: ${JSON.stringify(b)})`); }
+
+const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+
+/* Constantes propres à l'équipe : alignement publié sur ushl.ca (TeamRosters NASHVILLE
+   mis à jour le 2 octobre 2026, relevé par data/rosters.json).
+   masseSousContrat = somme des salaires CT>0 de l'alignement, sans le club-école
+   (Juuso Maenpaa, Graham Sward et Aidan Hreschuk n'entrent pas dans la masse pro).
+   Recoupée avec TeamFinance.php : « Masse salariale Pro : 103 075 300 $ » sur
+   22 contrats. masseTotale = les 25 contrats à leur pleine valeur, club-école
+   compris. Aucun contrat échu à ce relevé. */
+const ATTENDU = {
+  equipe: 'NASHVILLE',
+  taille: 25,
+  echantillon: {nom: 'Jesse Puljujarvi', salaire: 12250000, ct: 2, ov: 84},
+  masseSousContrat: 103075300,
+  nbSousContrat: 22,
+  masseTotale: 105325300
+};
+
+(async () => {
+  const dom = new JSDOM(html, {
+    runScripts: 'dangerously',
+    url: 'https://example.org/',
+    pretendToBeVisual: true
+  });
+  // neutraliser fetch (aucun réseau pendant les tests)
+  dom.window.fetch = () => Promise.reject(new Error('réseau désactivé en test'));
+  await new Promise(r => setTimeout(r, 300));
+  const W = dom.window;
+  const S = W.__SJS__;
+
+  console.log('— Chargement');
+  ok(!!S, 'API de test exposée (__SJS__)');
+  if (!S){ console.error('Arrêt.'); process.exit(1); }
+
+  console.log('— Données de secours');
+  egal(S.SECOURS_ROSTER.length, ATTENDU.taille, ATTENDU.taille + ' joueurs dans la formation de secours');
+  const echantillon = S.SECOURS_ROSTER.find(j => j.nom === ATTENDU.echantillon.nom);
+  ok(!!echantillon, 'Joueur témoin présent (' + ATTENDU.echantillon.nom + ')');
+  egal(echantillon.salaire, ATTENDU.echantillon.salaire, 'Salaire du joueur témoin');
+  egal(echantillon.ct, ATTENDU.echantillon.ct, 'Contrat du joueur témoin');
+  egal(echantillon.ov, ATTENDU.echantillon.ov, 'OV du joueur témoin');
+  egal(S.SECOURS_Y21, undefined, 'Aucun jeu de données de la saison précédente (retiré)');
+  ok(new Set(S.SECOURS_ROSTER.map(j=>j.nom)).size === S.SECOURS_ROSTER.length, 'Aucun nom en double');
+
+  console.log('— Moteur de profils (tableaux 10-11-12) et matrices associées — fixtures vérifiées à la main (recote du 28 juin; joueurs des Sharks conservés comme références)');
+  const FIXTURES_PROFILS = {
+   'Jesperi Kotkaniemi': {nom:'Jesperi Kotkaniemi', po:'C', hd:'G', it:70,sp:83,st:77,en:89,du:86,di:83,sk:83,pa:83,pc:79,df:62,sc:79,ex:61,ld:51,ov:82,age:25},
+   'Brad Lambert':       {nom:'Brad Lambert',       po:'C', hd:'D', it:68,sp:85,st:69,en:77,du:79,di:75,sk:83,pa:71,pc:74,df:56,sc:74,ex:49,ld:37,ov:76,age:22},
+   'Jaden Schwartz':     {nom:'Jaden Schwartz',     po:'C', hd:'G', it:62,sp:81,st:64,en:89,du:83,di:98,sk:89,pa:85,pc:83,df:66,sc:68,ex:99,ld:99,ov:81,age:33},
+   'Travis Konecny':     {nom:'Travis Konecny',     po:'AG',hd:'D', it:86,sp:78,st:74,en:81,du:75,di:70,sk:80,pa:79,pc:73,df:66,sc:80,ex:78,ld:68,ov:81,age:28},
+   'Nathan Legare':      {nom:'Nathan Legare',      po:'AG',hd:'D', it:82,sp:69,st:92,en:83,du:95,di:77,sk:69,pa:72,pc:69,df:65,sc:87,ex:57,ld:66,ov:81,age:24},
+   'Adam Fox':           {nom:'Adam Fox',           po:'D', hd:'D', it:64,sp:84,st:70,en:86,du:83,di:81,sk:85,pa:86,pc:76,df:79,sc:70,ex:60,ld:62,ov:83,age:27},
+   'Haydn Fleury':       {nom:'Haydn Fleury',       po:'D', hd:'G', it:80,sp:70,st:91,en:88,du:86,di:76,sk:85,pa:75,pc:70,df:82,sc:67,ex:69,ld:57,ov:84,age:29},
+   'Tyler Myers':        {nom:'Tyler Myers',        po:'D', hd:'D', it:73,sp:74,st:84,en:94,du:78,di:89,sk:81,pa:70,pc:70,df:80,sc:57,ex:99,ld:78,ov:81,age:35},
+   'Alexandar Georgiev': {nom:'Alexandar Georgiev', po:'G', hd:'G', it:83,sp:87,st:81,en:85,du:87,di:85,sk:88,pa:73,pc:80,df:null,sc:null,ex:83,ld:74,ov:80,age:29},
+   'Cal Petersen':       {nom:'Cal Petersen',       po:'G', hd:'D', it:84,sp:83,st:82,en:80,du:73,di:82,sk:83,pa:75,pc:85,df:null,sc:null,ex:60,ld:50,ov:78,age:31}
+  };
+  const joueurDe = nom => FIXTURES_PROFILS[nom];
+  const profilDe = nom => S.determinerProfil(joueurDe(nom));
+  egal(profilDe('Jesperi Kotkaniemi').profil, 'Elite', 'Kotkaniemi (fixture) → Elite');
+  egal(profilDe('Jesperi Kotkaniemi').mat, 'ELITE', 'Kotkaniemi (fixture) → matrice ELITE');
+  tableauEgal(profilDe('Jesperi Kotkaniemi').stats, ['shotpct','gwg','ppg','pts','pmrang'],
+    'Stats évaluées Elite = tableau 20 (PCTG, GWG, PP, P, +/-)');
+  egal(profilDe('Jaden Schwartz').profil, 'Playmaker', 'Schwartz (fixture) → Playmaker');
+  tableauEgal(profilDe('Jaden Schwartz').stats, ['assists','pts'], 'Stats Playmaker = A, P');
+  egal(profilDe('Travis Konecny').profil, 'Power Forward', 'Konecny (fixture) → Power Forward');
+  egal(profilDe('Nathan Legare').profil, 'Prospect Power Forward', 'Legare 24 ans (fixture) → Prospect Power Forward');
+  egal(profilDe('Nathan Legare').mat, 'POWERFWD', 'Prospect Power Forward → même matrice POWERFWD');
+  egal(profilDe('Adam Fox').profil, 'DEliteQB', 'Fox (fixture) → DEliteQB');
+  egal(profilDe('Haydn Fleury').profil, 'DEliteShutdown', 'Fleury (fixture) → DEliteShutdown');
+  egal(profilDe('Tyler Myers').profil, 'DEliteShutdown', 'Myers (fixture) → DEliteShutdown');
+  egal(profilDe('Alexandar Georgiev').profil, 'Starter Goalie', 'Georgiev OV 80 (fixture) → Starter Goalie');
+  tableauEgal(profilDe('Alexandar Georgiev').stats, ['hs','svpct','qggp','ming'], 'Stats Starter = HS, SV%, QG/GP, MIN');
+  egal(profilDe('Cal Petersen').profil, 'Backup Goalie', 'Petersen OV 78 (fixture) → Backup Goalie');
+  tableauEgal(profilDe('Cal Petersen').stats, ['mp','qggp','psv'], 'Stats Backup = MP, QG/GP, Psv');
+  egal(profilDe('Brad Lambert').profil, 'Prospect Sniper', 'Lambert (fixture) → Prospect Sniper');
+
+  console.log('— Profils sur l\'alignement actuel (dynamique)');
+  for (const j of S.SECOURS_ROSTER.filter(x => !x.backup)){
+    const p = S.determinerProfil(j);
+    ok(!!(p && p.profil && p.mat), j.nom + ' reçoit un profil (' + (p && p.profil) + ')');
+    ok(!!(p && S.STATS_PAR_MATRICE[p.mat]), j.nom + ' : matrice reconnue (' + (p && p.mat) + ')');
+    if (j.po === 'G') ok(/goalie/i.test(p.profil), j.nom + ' : profil de gardien');
+    else ok(!/goalie/i.test(p.profil), j.nom + ' : profil de patineur');
+  }
+
+  console.log('— Matrices des profils (article 6.2.6) : consultation par overall');
+  egal(Object.keys(S.MATRICES).length, 15, '15 matrices de profils');
+  const nbStats = Object.values(S.MATRICES).reduce((a,m)=>a+Object.keys(m).length,0);
+  egal(nbStats, 40, '40 tableaux de seuils au total');
+  tableauEgal(S.seuilsMatrice('ELITE','pts',82), [91,81,70,60,35,-1], 'Elite points OV 82 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('ELITE','pts',70), [24,21,18,16,9,-1], 'OV 70 ramené au rang 73');
+  tableauEgal(S.seuilsMatrice('ELITE','pts',95), [110,97,84,72,42,3], 'OV 95 ramené au rang 90');
+  tableauEgal(S.seuilsMatrice('DELITEQB','ppg',80), [2,1,0,-1,-2,-5], 'DElite QB buts en PP OV 80 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('STARTER','ming',85), [0.98,0.91,0.84,0.77,0.64,-1], 'Starter MIN (ratio) constant');
+  tableauEgal(S.seuilsMatrice('BACKUP','psv',78), [916,907,898,889,880,-1], 'Backup Psv OV 78 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('GRINDER','hits20',77), [2.33,2.13,1.93,1.73,1.53,-1], 'Grinder MEÉ/20 OV 77 (révision 2026)');
+  egal(S.seuilsMatrice('ELITE','inexistante',80), null, 'Statistique inconnue → null');
+
+  /* Confrontation à la page officielle (24 juillet 2026) : la rangée «À oublier» des
+     tirs du Power Forward remonte de −1 à 3 entre les OV 86 et 90, comme celle des buts
+     et des mises en échec du même profil. */
+  tableauEgal(S.seuilsMatrice('POWERFWD','shots',86), [286,253,220,187,110,-1], 'Power Forward tirs OV 86 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('POWERFWD','shots',87), [286,253,220,187,110,0],  'Power Forward tirs OV 87 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('POWERFWD','shots',88), [286,253,220,187,110,1],  'Power Forward tirs OV 88 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('POWERFWD','shots',89), [286,253,220,187,110,2],  'Power Forward tirs OV 89 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('POWERFWD','shots',90), [286,253,220,187,110,3],  'Power Forward tirs OV 90 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('POWERFWD','goals',90), [42,38,34,30,26,3], 'Power Forward buts OV 90 (révision 2026)');
+  tableauEgal(S.seuilsMatrice('POWERFWD','hits',90),  [292,258,224,191,112,3], 'Power Forward MEÉ OV 90 (révision 2026)');
+  /* Le Backup Goalie n'existe pas au-delà de l'OV 79 : les trois tableaux s'arrêtent là. */
+  tableauEgal(S.seuilsMatrice('BACKUP','mp',79), [1243,933,622,466,311,-1], 'Backup minutes OV 79 (révision 2026)');
+  egal(S.seuilsMatrice('BACKUP','mp',80), null, 'Backup minutes OV 80 → hors matrice');
+  egal(S.seuilsMatrice('BACKUP','qggp',80), null, 'Backup DQ/match OV 80 → hors matrice');
+  egal(S.seuilsMatrice('BACKUP','psv',80), null, 'Backup Psv OV 80 → hors matrice');
+
+  console.log('— Statuts (tableau 18) : un degré exige de DÉPASSER STRICTEMENT son seuil');
+  const sE82 = S.seuilsMatrice('ELITE','pts',82); // [91,81,70,60,35,-1]
+  egal(S.statutSelonSeuils(97.5, sE82), 'memorable', '97,5 pts > 97 → Mémorable');
+  egal(S.statutSelonSeuils(91,   sE82), 'excellente', '91 pts = seuil Mémorable → Excellente (pas de Mémorable sans dépasser)');
+  egal(S.statutSelonSeuils(87,   sE82), 'excellente', '87 pts → Excellente');
+  egal(S.statutSelonSeuils(75,   sE82), 'satisfaisante', '75 pts → Satisfaisante');
+  egal(S.statutSelonSeuils(70,   sE82), 'correcte', '70 pts = seuil Satisfaisante → Correcte');
+  egal(S.statutSelonSeuils(64,   sE82), 'correcte', '64 pts → Correcte');
+  egal(S.statutSelonSeuils(38,   sE82), 'decevante', '38 pts → Décevante');
+  egal(S.statutSelonSeuils(35,   sE82), 'oublier', '35 pts = seuil Décevante → À oublier');
+  egal(S.statutSelonSeuils(null, sE82), 'indef', 'Valeur absente → à définir');
+  egal(S.statutSelonSeuils(50, [60,null,null,null,null,null]), 'sousmemo', 'Seule cible Mémorable connue, non dépassée → sous le Mémorable');
+
+  console.log('— Évaluation des totaux tels quels (aucune projection : facteur karma)');
+  let ev = S.evaluerStat('pts', 98, sE82);
+  egal(ev.valeur, 98, 'La valeur évaluée est le total courant, sans mise à l\'échelle');
+  egal(ev.statut, 'memorable', '98 pts → Mémorable');
+  egal(ev.mods, 60, 'ModS +60 pour un Mémorable');
+  ev = S.evaluerStat('pts', 40, sE82);
+  egal(ev.statut, 'decevante', '40 pts → Décevante');
+  egal(ev.mods, -20, 'ModS -20 pour une Décevante');
+  ev = S.evaluerStat('shotpct', 15.7, S.seuilsMatrice('ELITE','shotpct',82));
+  egal(ev.statut, 'excellente', 'PCTG 15,7 sur seuils OV 82 → Excellente (seuil E = 15,62875, révision 2026)');
+  ev = S.evaluerStat('shotpct', 15.2, S.seuilsMatrice('ELITE','shotpct',82));
+  egal(ev.statut, 'satisfaisante', 'PCTG 15,2 sur seuils OV 82 → Satisfaisante (sous le seuil E fin)');
+  ev = S.evaluerStat('pts', null, sE82);
+  egal(ev.statut, 'indef', 'Sans valeur → à définir');
+
+  console.log('— Statistiques dérivées');
+  const prod = {gp:20, goals:10, shots:80, hits:60, mp:400, qs:8, svpct:0.905, pts:25};
+  const jTest = {nom:'Test Joueur', po:'C'};
+  proche(S.valeurStat(jTest, prod, 'shotpct'), 12.5, 1e-9, '%T = 10/80 = 12,5');
+  proche(S.valeurStat(jTest, prod, 'hits20'), 3, 1e-9, 'MEÉ/20 = 60/(400/20) = 3');
+  proche(S.valeurStat(jTest, prod, 'shots20'), 4, 1e-9, 'T/20 = 80/(400/20) = 4');
+  proche(S.valeurStat(jTest, prod, 'mg'), 20, 1e-9, 'MIN/M = 400/20');
+  proche(S.valeurStat(jTest, prod, 'qggp'), 0.4, 1e-9, 'DQ/M = 8/20');
+  proche(S.valeurStat(jTest, prod, 'psv'), 905, 1e-9, 'Psv = %A × 1000');
+  egal(S.valeurStat(jTest, prod, 'pts'), 25, 'Stat directe inchangée');
+  const ctx = {limites: new Map([[S.normaliserNom('Test Joueur'), 62]])};
+  proche(S.valeurStat(jTest, {gp:15}, 'ming', ctx), 15/62, 1e-9, 'MIN gardien = parties jouées / limite (ratio brut)');
+  egal(S.valeurStat(jTest, {gp:15}, 'ming', {limites:new Map()}), null, 'Sans limite connue → à définir');
+
+  console.log('— Rang du différentiel dans le club (tableau 20)');
+  const rangs = S.calculerPmRangs([
+    {nom:'Aa', gp:5, plusminus:5},
+    {nom:'Bb', gp:5, plusminus:0},
+    {nom:'Cc', gp:5, plusminus:-3},
+    {nom:'Dd', gp:0, plusminus:9}   // exclu : aucun match
+  ]);
+  proche(rangs.get(S.normaliserNom('Aa'))?.prop, 1, 1e-9, 'Meilleur +/- → proportion 1,00');
+  egal(rangs.get(S.normaliserNom('Aa'))?.rang, 1, 'Meilleur +/- → 1er rang');
+  proche(rangs.get(S.normaliserNom('Bb'))?.prop, 0.5, 1e-9, 'Milieu → 0,50');
+  egal(rangs.get(S.normaliserNom('Bb'))?.rang, 2, 'Milieu → 2e rang');
+  proche(rangs.get(S.normaliserNom('Cc'))?.prop, 0, 1e-9, 'Dernier → 0,00');
+  egal(rangs.get(S.normaliserNom('Cc'))?.total, 3, 'Classement sur 3 patineurs qualifiés');
+  ok(!rangs.has(S.normaliserNom('Dd')), 'Joueur sans match exclu du classement');
+
+
+  console.log('— Automatisation du rang +/- à l\'arrivée des statistiques (bout en bout)');
+  {
+    const ETAT2 = S.ETAT;
+    const avantScoring2 = ETAT2.scoring, avantArchive2 = ETAT2.xtraArchive;
+    // dès que TeamScoring fournit des patineurs avec un différentiel, le rang se calcule seul
+    const patineursRoster = S.SECOURS_ROSTER.filter(x9=>x9.po!=='G' && !x9.backup);
+    const scoringFictif = patineursRoster.map((x9,i9)=>({
+      nom:x9.nom, gp:10, goals:i9%4, assists:i9%5, pts:(i9%4)+(i9%5), shots:20+i9,
+      pim:2, plusminus:(patineursRoster.length-1)/2 - i9, ppg:1, gwg:1
+    }));
+    ETAT2.scoring = {patineurs:scoringFictif, gardiens:[]};
+    ETAT2.xtraArchive = true;
+    const rangsAuto = S.calculerPmRangs(ETAT2.scoring.patineurs);
+    egal(rangsAuto.size, patineursRoster.length, 'Tous les patineurs qualifiés sont classés automatiquement');
+    const meilleur = patineursRoster[0];
+    const rMeilleur = rangsAuto.get(S.normaliserNom(meilleur.nom));
+    egal(rMeilleur?.rang, 1, 'Le meilleur différentiel du club obtient le 1er rang');
+    proche(S.valeurStat(meilleur, {gp:10}, 'pmrang', {pmRangs:rangsAuto}), 1, 1e-9,
+      'valeurStat lit la proportion de rang sans intervention');
+    // un joueur évalué sur le rang +/- reçoit un statut réel dans l'interface re-rendue
+    const jPm = ETAT2.roster.find(x9=>x9._profil?.stats?.includes('pmrang') && !x9.backup);
+    ok(!!jPm, 'Au moins un joueur du club est évalué sur le rang +/-');
+    if (jPm){
+      W.document.querySelector('#progFiltres button[data-f="tous"]').click(); // force le re-rendu
+      const carte = [...W.document.querySelectorAll('#progGrille .joueur-carte')]
+        .find(c=>c.querySelector('.jc-nom').textContent===jPm.nom);
+      ok(!!carte, 'Carte du joueur rendue avec la production fictive');
+      const lignePm = [...(carte?.querySelectorAll('.stat-ligne')||[])]
+        .find(l=>l.querySelector('.nom-stat').textContent.includes('Rang +/-'));
+      ok(!!lignePm, 'Ligne «Rang +/- au club» présente');
+      ok(lignePm && !lignePm.querySelector('.badge-etat.indef'), 'Le rang +/- reçoit un statut (plus «à définir»)');
+      ok(lignePm && /ᵉ\/\d+/.test(lignePm.textContent), 'Rang ordinal affiché (ex. 4ᵉ/18)');
+    }
+    ETAT2.scoring = avantScoring2; ETAT2.xtraArchive = avantArchive2;
+    W.document.querySelector('#progFiltres button[data-f="tous"]').click(); // retour à l'état initial
+  }
+
+
+  console.log('— Validation de l\'équipe des pages téléchargées (session des relais)');
+  {
+    const bonne = 'menu de la ligue… ' + S.CONFIG.equipe + ' 3-2-0 … table des joueurs';
+    ok(S.validerPageEquipe(bonne), 'Page de la bonne équipe acceptée (sa fiche s\'y trouve)');
+    ok(!S.validerPageEquipe('menu de la ligue… ZZAUTRE 11-8-0 … table des joueurs'),
+       'Page d\'une autre équipe rejetée (fiche du club absente) — sera réessayée, jamais mise en cache');
+    egal(S.extraireFiche(bonne), S.CONFIG.equipe + ' 3-2-0', 'Fiche extraite de la page validée');
+  }
+
+  console.log('— Modificateurs (tableaux 17 et 19) et fourchette de recote');
+  egal(S.modA({po:'C', age:25}), 5, 'Patineur 25 ans → ModA +5');
+  egal(S.modA({po:'C', age:35}), -25, 'Patineur 35 ans → ModA -25');
+  egal(S.modA({po:'G', age:29}), 5, 'Gardien 29 ans → ModA +5');
+  egal(S.modA({po:'G', age:33}), -10, 'Gardien 33 ans → ModA -10');
+  egal(S.convertirJet(146), 3, 'Jet 146 → +3 (recote plafonnée à +3)');
+  egal(S.convertirJet(200), 3, 'Aucun jet ne dépasse +3');
+  egal(S.convertirJet(121), 2, 'Jet 121 → +2');
+  egal(S.convertirJet(100), 0, 'Jet 100 → 0');
+  egal(S.convertirJet(51), -1, 'Jet 51 → -1');
+  egal(S.convertirJet(10), -4, 'Jet 10 → -4');
+  egal(S.convertirJet(-25), -5, 'Jet -25 → -5');
+  const four = S.fourchetteRecote(joueurDe('Jesperi Kotkaniemi'), 10); // fixture 25 ans → ModA+5 → base 75
+  egal(four.base, 75, 'Base = 60 + ModA(5) + ModS(10)');
+  egal(four.min, 0, 'Pire jet (76) → 0');
+  egal(four.max, 1, 'Meilleur jet (115) → +1');
+
+  console.log('— Priorité des seuils : rangée personnalisée > Y17 ; surcharge = Mémorable seul');
+  const jk = joueurDe('Jesperi Kotkaniemi');
+  jk._profil = S.determinerProfil(jk);
+  let s = S.seuilsPour(jk, 'pts', {}, {});
+  tableauEgal(s.seuils, [91,81,70,60,35,-1], 'Seuils par défaut (OV 82, révision 2026)');
+  egal(s.source, 'Y17', 'Source = Y17');
+  const perso = {ELITE: {pts: {82: [100,90,80,70,40,-1]}}};
+  s = S.seuilsPour(jk, 'pts', perso, {});
+  tableauEgal(s.seuils, [100,90,80,70,40,-1], 'La rangée personnalisée remplace Y17');
+  egal(s.source, 'personnalisée', 'Source = personnalisée');
+  s = S.seuilsPour(jk, 'pts', {}, {[S.normaliserNom(jk.nom)]: {pts: 120}});
+  egal(s.seuils[0], 120, 'La surcharge fixe le seuil Mémorable');
+  egal(s.seuils[2], 70, 'Les autres degrés restent ceux de la matrice (révision 2026)');
+
+  console.log('— Parseur de formation (fixture HTML réaliste)');
+  const fixtureRoster = `<html><body><table>
+    <tr><th>Nom</th><th>PO</th><th>HD</th><th>CD</th><th>IJ</th><th>IN</th><th>SP</th><th>ST</th><th>EN</th><th>DU</th><th>DI</th><th>SK</th><th>PA</th><th>PC</th><th>DF</th><th>OF</th><th>EX</th><th>LD</th><th>OV</th><th>Age</th><th>Salary</th><th>CT</th><th>HT</th><th>WT</th><th>Lien</th></tr>
+    <tr><td>Jesperi Kotkaniemi</td><td>C</td><td>G</td><td>OK</td><td></td><td>70</td><td>83</td><td>77</td><td>89</td><td>86</td><td>83</td><td>83</td><td>83</td><td>79</td><td>62</td><td>79</td><td>61</td><td>51</td><td>82</td><td>25</td><td>7 250 000 $</td><td>3</td><td>6 ' 2</td><td>198 lbs</td><td>Lien</td></tr>
+    <tr><td>Alexandar Georgiev</td><td>G</td><td>G</td><td>OK</td><td></td><td>83</td><td>87</td><td>81</td><td>85</td><td>87</td><td>85</td><td>88</td><td>73</td><td>80</td><td>NA</td><td>NA</td><td>83</td><td>74</td><td>80</td><td>29</td><td>3 000 000 $</td><td>1</td><td>6 ' 1</td><td>179 lbs</td><td>Lien</td></tr>
+    <tr><td></td><td></td><td></td><td></td><td></td><td>70</td><td>76</td><td>76</td><td>80</td><td>77</td><td>79</td><td>78</td><td>73</td><td>73</td><td>68</td><td>70</td><td>68</td><td>61</td><td>78</td><td>28</td><td>3 370 000 $</td><td>1,5</td><td>6 ' 1</td><td>195</td><td></td></tr>
+  </table></body></html>`;
+  const docR = new W.DOMParser().parseFromString(fixtureRoster, 'text/html');
+  const joueurs = S.parseRoster(null, docR);
+  egal(joueurs.length, 2, 'Deux joueurs extraits (rangée des moyennes ignorée)');
+  egal(joueurs[0].nom, 'Jesperi Kotkaniemi', 'Nom du premier joueur');
+  egal(joueurs[0].salaire, 7250000, 'Salaire converti (espaces et $)');
+  egal(joueurs[0].sc, 79, 'Colonne OF lue comme SC');
+  egal(joueurs[1].df, null, 'DF du gardien = NA → null');
+
+  console.log('— Parseur multi-tables : les joueurs sans contrat / club-école ne sont plus perdus');
+  {
+    const lg = (nom,ct)=>`<tr><td>${nom}</td><td>D</td><td>D</td><td>OK</td><td></td><td>64</td><td>84</td><td>70</td><td>86</td><td>83</td><td>81</td><td>85</td><td>86</td><td>76</td><td>79</td><td>70</td><td>60</td><td>62</td><td>82</td><td>27</td><td>9 075 000 $</td><td>${ct}</td><td>6 ' 0</td><td>195 lbs</td><td>Lien</td></tr>`;
+    const en = '<tr><th>Nom</th><th>PO</th><th>HD</th><th>CD</th><th>IJ</th><th>IN</th><th>SP</th><th>ST</th><th>EN</th><th>DU</th><th>DI</th><th>SK</th><th>PA</th><th>PC</th><th>DF</th><th>OF</th><th>EX</th><th>LD</th><th>OV</th><th>Age</th><th>Salary</th><th>CT</th><th>HT</th><th>WT</th><th>Lien</th></tr>';
+    const fx = '<html><body><table>' + en + lg('Joueur Aligne',2) + '</table>'
+      + '<table>' + en + lg('Joueur Echu',0) + '</table>'
+      + '<table>' + en + lg('Joueur Retenu',2) + '</table></body></html>';
+    const docM = new W.DOMParser().parseFromString(fx, 'text/html');
+    const js2 = S.parseRoster(null, docM);
+    egal(js2.length, 3, 'Les trois tables sont lues (plus d\'arrêt à la première)');
+    egal(js2.find(x=>x.nom==='Joueur Aligne').horsAlignement, false, 'Première table = alignement PRO');
+    egal(js2.find(x=>x.nom==='Joueur Echu').horsAlignement, true, 'Table suivante → hors alignement (sans contrat)');
+    egal(js2.find(x=>x.nom==='Joueur Retenu').horsAlignement, true, 'Club-école → hors alignement');
+    // rendu et masse
+    const rosterAvant = S.ETAT.roster;
+    S.ETAT.roster = js2.map(x=>({...x, _profil:S.determinerProfil(x)}));
+    W.localStorage.removeItem(S.CLES_LS.resign);
+    W.document.querySelector('[data-vue="alignement"]')?.click();
+    W.document.querySelector('#tableAlignement thead th[data-col="ov"]')?.click();
+    egal(W.document.querySelectorAll('#tableAlignement tbody tr').length, 1, 'Table principale : alignement seulement');
+    ok(W.document.getElementById('horsAlignement').style.display !== 'none', 'Section «Hors alignement» affichée');
+    egal(W.document.querySelectorAll('#tableHorsAlign tbody tr').length, 2, 'Deux joueurs hors alignement visibles (plus disparus!)');
+    const btnEchu = [...W.document.querySelectorAll('#tableHorsAlign button.btn-prolong')].find(b=>b.dataset.nom==='Joueur Echu');
+    ok(!!btnEchu, 'Le joueur à contrat échu (0 an) hors alignement a son bouton «Prolonger»');
+    ok(![...W.document.querySelectorAll('#tableHorsAlign button.btn-prolong')].find(b=>b.dataset.nom==='Joueur Retenu'),
+      'Le joueur retenu (CT 2) hors alignement n\'est pas prolongeable');
+    egal(S.calculerMasse({}).masse, 9075000, 'Masse = alignement seul (hors alignement jamais compté)');
+    btnEchu.click();
+    W.document.getElementById('mpOk').click();
+    const masseP = S.calculerMasse(S.litResignatures()).masse;
+    ok(masseP > 9075000, 'Le hors-alignement prolongé rentre au plafond');
+    ok(W.document.querySelector('#alignSommaire .det').textContent.includes('prolongé'), 'Sommaire compte le prolongé hors alignement');
+    W.localStorage.removeItem(S.CLES_LS.resign);
+    S.ETAT.roster = rosterAvant;
+    W.document.querySelector('#tableAlignement thead th[data-col="ov"]')?.click();
+  }
+
+
+  console.log('— Parseur de pointage (fixture)');
+  const fixtureScoring = `<html><body><table>
+    <tr><th>Name</th><th>GP</th><th>G</th><th>A</th><th>PTS</th><th>+/-</th><th>PIM</th><th>PP</th><th>GW</th><th>S</th><th>PCT</th></tr>
+    <tr><td>Jaden Schwartz</td><td>10</td><td>4</td><td>8</td><td>12</td><td>5</td><td>2</td><td>2</td><td>1</td><td>25</td><td>16.0</td></tr>
+  </table><table>
+    <tr><th>Name</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>AVG</th><th>SV%</th><th>SO</th><th>HS</th></tr>
+    <tr><td>Alexandar Georgiev</td><td>6</td><td>4</td><td>2</td><td>0</td><td>2.31</td><td>0.915</td><td>1</td><td>2</td></tr>
+  </table></body></html>`;
+  const docS = new W.DOMParser().parseFromString(fixtureScoring, 'text/html');
+  const sc = S.parseScoring(null, docS);
+  egal(sc.patineurs.length, 1, 'Un patineur extrait');
+  egal(sc.patineurs[0].pts, 12, 'Points de Schwartz');
+  egal(sc.patineurs[0].plusminus, 5, 'Différentiel de Schwartz');
+  egal(sc.gardiens.length, 1, 'Un gardien extrait');
+  egal(sc.gardiens[0].w, 4, 'Victoires de Georgiev');
+  ok(Math.abs(sc.gardiens[0].avg - 2.31) < 1e-9, 'Moyenne de Georgiev');
+  egal(sc.gardiens[0].hs, 2, 'Colonne HS lue');
+
+  console.log('— Parseur XtraStats (fixture texte)');
+  const fixtureXtra = [
+    '    Player                    Team            POS GP   G   A   P  Sh PiM   MP   H Sh/G',
+    '    [Jaden Schwartz](https://x/#Jaden Schwartz) NASHVILLE         C   82  25  69  94 187  10 1767  81 2.28',
+    '    [Alex Tuch](https://x/#Alex Tuch) ANAHEIM         RW  77  27  32  59 183  16 1503 243 2.38',
+    '    [* Backup_RW](https://x/#Backup_RW) NASHVILLE         LW   3   0   0   0   0   0    0   0 0.00'
+  ].join('\n');
+  const x = S.parseXtra(fixtureXtra, 'NASHVILLE');
+  egal(x.length, 2, 'Deux patineurs NASHVILLE extraits (Anaheim exclu)');
+  egal(x[0].hits, 81, 'MEÉ de Schwartz depuis XtraStats');
+  egal(x[0].mp, 1767, 'Minutes de Schwartz depuis XtraStats');
+
+  console.log('— Rendu de l\'interface');
+  const doc = W.document;
+  const rangees = doc.querySelectorAll('#tableAlignement tbody tr');
+  const enAlignement = S.SECOURS_ROSTER.filter(x => !x.horsAlignement);
+  egal(rangees.length, enAlignement.length, enAlignement.length + ' rangées dans la table d\'alignement (club-école à part)');
+  egal(doc.querySelectorAll('#tableHorsAlign tbody tr').length, 3, 'Maenpaa, Sward et Hreschuk dans la table «Hors alignement»');
+  ok(doc.querySelector('#alignSommaire').textContent.includes('Masse salariale'), 'Sommaire de masse salariale rendu');
+  ok(doc.querySelector('#ficheEquipe').textContent.includes(ATTENDU.equipe), 'Fiche d\'équipe affichée');
+  const cartes = doc.querySelectorAll('#progGrille .joueur-carte');
+  ok(cartes.length >= 20, 'Cartes de progression rendues (' + cartes.length + ')');
+  ok(doc.querySelector('#progGrille').textContent.includes('ModS estimé'), 'ModA / ModS affichés sur les cartes');
+  ok(doc.querySelectorAll('#progGrille .att-input').length > 0, 'Champs de cible Mémorable présents');
+  const selMatrice = doc.querySelector('#selMatrice');
+  egal(selMatrice.options.length, 15, 'Sélecteur des 15 matrices peuplé');
+  ok(doc.querySelector('#selStat').options.length >= 1, 'Sélecteur de statistique peuplé');
+  const rangeesMat = doc.querySelectorAll('#tableMatrice tbody tr');
+  egal(rangeesMat.length, 18, 'Éditeur : rangées OV 73 à 90');
+  egal(doc.querySelectorAll('#tableMatrice tbody input').length, 108, 'Éditeur : 18 rangées × 6 degrés');
+  ok(doc.querySelector('#tableMatrice thead').textContent.includes('Mémorable'), 'Colonnes des degrés de satisfaction');
+  ok(doc.querySelector('#sourcesTexte').textContent.includes('limites.json'), 'Source limites.json documentée');
+  const boutonDiff = doc.querySelector('#progFiltres button[data-f="difficulte"]');
+  ok(!!boutonDiff, 'Filtre «En difficulté» présent');
+
+  console.log('— Masse salariale (cohérence)');
+  const actifs = S.SECOURS_ROSTER.filter(x2 => !x2.backup);
+  const comptabilises = actifs.filter(x2 => x2.ct > 0 && !x2.horsAlignement);
+  const masse = comptabilises.reduce((s2, x2) => s2 + x2.salaire, 0);
+  egal(comptabilises.length, ATTENDU.nbSousContrat, ATTENDU.nbSousContrat + ' joueurs sous contrat (CT > 0)');
+  egal(masse, ATTENDU.masseSousContrat, 'Masse des salaires sous contrat = masse salariale pro de TeamFinance.php (club-école exclu)');
+  egal(actifs.reduce((s2, x2) => s2 + x2.salaire, 0), ATTENDU.masseTotale,
+    'Masse totale du bloc NASHVILLE (club-école compris, à la valeur des contrats)');
+  egal(actifs.filter(x2 => x2.ct === 0).length, 0, 'Aucun contrat échu au relevé du 2 octobre');
+  egal(actifs.filter(x2 => x2.horsAlignement).length, 3, 'Trois joueurs au club-école (Maenpaa, Sward, Hreschuk)');
+  ok(!doc.querySelector('#alignSommaire .stat-carte').classList.contains('alerte'), 'Sous le plafond de 104 M$ : aucune alerte');
+  ok(doc.querySelector('#alignSommaire .stat-carte .det').textContent.replace(/\s/g,'').includes('104000000'), 'Plafond affiché = 104 000 000 $');
+
+  console.log('— Charte salariale des re-signatures (Y22, cap 104 M)');
+  // Salaires minimums transcrits de la charte (en dollars)
+  egal(S.salaireMinimum(74, 'RFA', 25), 700000, 'RFA OV74- = 700 000 $');
+  egal(S.salaireMinimum(82, 'RFA', 25), 8750000, 'RFA OV82 = 8 750 000 $');
+  egal(S.salaireMinimum(90, 'RFA', 22), 17500000, 'RFA OV87+ = 17 500 000 $ (clamp haut)');
+  egal(S.salaireMinimum(80, 'UFA', 30), 5000000, 'UFA OV80 34- = 5 000 000 $');
+  egal(S.salaireMinimum(80, 'UFA', 36), 3250000, 'UFA OV80 35+ = 3 250 000 $ (tranche d\'âge)');
+  egal(S.salaireMinimum(83, 'UFAR2', 32), 7500000, 'UFA Ronde 2 OV83 34- = 7 500 000 $');
+  egal(S.salaireMinimum(85, 'SANS', 37), 6000000, 'Sans contrat OV85 35+ = 6 000 000 $ (coquille de la charte publiée corrigée : 5 000 → 6 000)');
+  egal(S.salaireMinimum(70, 'RFA', 25), 700000, 'OV sous 74 → clamp au plancher (700 000 $)');
+  // Statut déduit de l'âge (règle retenue : 28- = RFA, sinon UFA)
+  egal(S.statutResignature({age:28}), 'RFA', '28 ans → RFA');
+  egal(S.statutResignature({age:29}), 'UFA', '29 ans → UFA');
+  egal(S.statutResignature({age:22}), 'RFA', '22 ans → RFA');
+  // Durées maximales par statut (charte)
+  egal(S.dureeMaxCharte('RFA'), 7, 'RFA : durée max 7 ans');
+  egal(S.dureeMaxCharte('UFA'), 4, 'UFA : durée max 4 ans');
+  egal(S.dureeMaxCharte('UFAR2'), 2, 'UFA Ronde 2 : durée max 2 ans');
+  egal(S.dureeMaxCharte('SANS'), 1, 'Sans contrat : durée 1 an');
+  // Clé de charte avec tranche d'âge
+  egal(S.cleCharte('UFA', 34), 'UFA_34', 'UFA 34 ans → colonne 34-');
+  egal(S.cleCharte('UFA', 35), 'UFA_35', 'UFA 35 ans → colonne 35+');
+  // Règle RFA : 1 à 7 saisons à la discrétion du DG, +1 échelon par année après 3
+  egal(S.echelonEffectif(80, 'RFA', 3), 80, 'RFA 3 ans → échelon de base (OV 80)');
+  egal(S.echelonEffectif(80, 'RFA', 4), 81, 'RFA 4 ans → échelon +1 (OV 81)');
+  egal(S.echelonEffectif(80, 'RFA', 7), 84, 'RFA 7 ans → échelon +4 (OV 84)');
+  egal(S.echelonEffectif(80, 'UFA', 4), 80, 'La règle d\'échelon ne touche pas les UFA');
+  egal(S.salaireMinimum(80, 'RFA', 25, 1), 5750000, 'RFA OV80, 1 an = 5 750 000 $');
+  egal(S.salaireMinimum(80, 'RFA', 25, 3), 5750000, 'RFA OV80, 3 ans = même minimum (5 750 000 $)');
+  egal(S.salaireMinimum(80, 'RFA', 25, 4), 7500000, 'RFA OV80, 4 ans = échelon 81 (7 500 000 $)');
+  egal(S.salaireMinimum(80, 'RFA', 25, 7), 12250000, 'RFA OV80, 7 ans = échelon 84 (12 250 000 $)');
+  egal(S.salaireMinimum(86, 'RFA', 24, 7), 17500000, 'RFA OV86, 7 ans → échelon 90, clampé à 87+ (17 500 000 $)');
+  egal(S.salaireMinimum(80, 'UFA', 30, 4), 5000000, 'UFA OV80, 4 ans = minimum inchangé (5 000 000 $)');
+  // Règle des gardiens : un échelon plus bas à la prolongation
+  egal(S.echelonEffectif(83, 'UFA', 2, 'G'), 82, 'Gardien OV83 → échelon 82 (un échelon plus bas)');
+  egal(S.echelonEffectif(83, 'UFA', 2, 'C'), 83, 'Patineur OV83 → échelon inchangé');
+  egal(S.echelonEffectif(80, 'RFA', 5, 'G'), 81, 'Gardien RFA 5 ans : +2 (durée) −1 (gardien) = OV81');
+  egal(S.salaireMinimum(83, 'UFA', 32, 2, 'G'), 7500000, 'Gardien UFA OV83 34- → minimum de l\'échelon 82 (7 500 000 $)');
+  egal(S.salaireMinimum(83, 'UFA', 32, 2, 'C'), 8750000, 'Patineur UFA OV83 34- → minimum de son échelon (8 750 000 $)');
+  egal(S.salaireMinimum(74, 'UFA', 30, 1, 'G'), 900000, 'Gardien OV74 → clamp au plancher de la charte');
+  // Éligibilité : seuls les contrats échus (0 an) se prolongent
+  egal(S.peutProlonger({ct:0, backup:false}), true, 'Contrat échu (0 an) → prolongeable');
+  egal(S.peutProlonger({ct:1, backup:false}), false, 'Sous contrat (1 an) → NON prolongeable');
+  egal(S.peutProlonger({ct:0, backup:true}), false, 'Backup → jamais prolongeable');
+  // Format et parsing des montants
+  egal(S.parseArgent('8,5 M'), 8500000, 'parseArgent «8,5 M» = 8 500 000');
+  egal(S.parseArgent('900 k'), 900000, 'parseArgent «900 k» = 900 000');
+  egal(S.parseArgent('7500000'), 7500000, 'parseArgent «7500000» = 7 500 000');
+  egal(S.fmtArgentCourt(8500000), '8,5 M', 'fmtArgentCourt 8,5 M');
+  egal(S.fmtArgentCourt(900000), '900 k', 'fmtArgentCourt 900 k');
+
+  console.log('— Fenêtre «Prolongation de contrat» : éligibilité, ouverture, bornage, impact, retrait');
+  W.localStorage.removeItem(S.CLES_LS.resign);
+  doc.querySelector('[data-vue="alignement"]')?.click();
+  // Aucun joueur sous contrat n'offre de bouton : seuls les contrats échus (0 an) se prolongent
+  const jSous = S.ETAT.roster.find(x=>!x.backup && x.ct > 0);
+  ok(!!jSous, 'Au moins un joueur sous contrat dans le club');
+  ok(![...doc.querySelectorAll('button.btn-prolong[data-nom]')].find(b=>b.dataset.nom===jSous.nom),
+    'Joueur sous contrat : pas de bouton «Prolonger» (règle de la ligue)');
+  S.ouvrirProlongation(jSous.nom);
+  ok(!doc.getElementById('modalProlong') || doc.getElementById('modalProlong').hidden,
+    'ouvrirProlongation refuse un joueur sous contrat (défense en profondeur)');
+  // Muter un patineur à contrat échu pour tester la mécanique complète, puis restaurer
+  const jMut = S.ETAT.roster.find(x=>!x.backup && x.po!=='G');
+  const ctAvant = jMut.ct;
+  jMut.ct = 0;
+  doc.querySelector('#tableAlignement thead th[data-col="ov"]')?.click(); // re-rendu
+  const btnP = [...doc.querySelectorAll('button.btn-prolong[data-nom]')].find(b=>b.dataset.nom===jMut.nom);
+  ok(!!btnP, 'Contrat échu (0 an) : bouton «Prolonger» présent');
+  egal(btnP.textContent.trim(), 'Prolonger', 'Libellé initial du bouton');
+  const nomP = jMut.nom, cleP = S.normaliserNom(nomP);
+  const statutP = S.statutResignature(jMut);
+  btnP.click();                                   // ouvre la fenêtre
+  const modal = doc.getElementById('modalProlong');
+  ok(!!modal && !modal.hidden, 'La fenêtre de prolongation s\'ouvre au clic');
+  egal(doc.getElementById('mpNom').textContent, nomP, 'Nom du joueur affiché dans la fenêtre');
+  egal(doc.getElementById('mpStatut').value, statutP, 'Statut proposé = statut déduit de l\'âge');
+  const dureeInitP = statutP === 'RFA' ? 3 : S.dureeMaxCharte(statutP);
+  const minPD = S.salaireMinimum(jMut.ov, statutP, jMut.age, dureeInitP, jMut.po);
+  egal(+doc.getElementById('mpDuree').value, dureeInitP, 'Durée proposée : 3 ans pour un RFA (dernier palier sans hausse), durée max sinon');
+  egal(S.parseArgent(doc.getElementById('mpSalaire').value), minPD, 'Salaire pré-rempli au minimum de la charte pour cette durée');
+  egal(doc.getElementById('mpDuree').options.length, S.dureeMaxCharte(statutP),
+    'Durées offertes = 1 à la durée max du statut');
+  ok(doc.getElementById('mpImpact').textContent.includes('Masse projetée'), 'Aperçu d\'impact sur la masse affiché');
+  ok(doc.getElementById('mpRetirer').style.display === 'none', 'Bouton «Retirer» masqué pour un joueur non prolongé');
+  // un salaire sous le minimum est ramené au minimum à la confirmation
+  doc.getElementById('mpSalaire').value = '1';
+  doc.getElementById('mpOk').click();
+  ok(modal.hidden, 'La fenêtre se ferme après confirmation');
+  const rP = S.litResignatures();
+  ok(!!rP[cleP], 'Prolongation persistée');
+  egal(rP[cleP].salaire, minPD, 'Salaire sous le minimum ramené au minimum de la charte');
+  egal(rP[cleP].statut, statutP, 'Statut enregistré');
+  ok(rP[cleP].duree >= 1 && rP[cleP].duree <= S.dureeMaxCharte(statutP), 'Durée enregistrée dans les bornes de la charte');
+  ok(doc.querySelector('#alignSommaire .det').textContent.includes('prolongé'), 'Mention «prolongé» dans le sommaire de masse');
+  const btnP2 = [...doc.querySelectorAll('button.btn-prolong[data-nom]')].find(b=>b.dataset.nom===nomP);
+  ok(btnP2.classList.contains('actif') && btnP2.textContent.includes('Prolongé'), 'Bouton passe à l\'état «Prolongé»');
+  // la masse inclut le salaire de prolongation (le joueur ct=0 rentre au plafond)
+  const masseAvecP = S.calculerMasse(S.litResignatures()).masse;
+  const masseSansP = S.calculerMasse({}).masse;
+  egal(masseAvecP - masseSansP, minPD, 'Le prolongé (contrat échu) rentre au plafond avec son salaire de prolongation');
+  // hausse volontaire au-dessus du minimum
+  btnP2.click();
+  ok(doc.getElementById('mpRetirer').style.display !== 'none', 'Bouton «Retirer» visible pour un joueur prolongé');
+  egal(doc.getElementById('mpOk').textContent, 'Mettre à jour', 'Bouton de confirmation devient «Mettre à jour»');
+  const hausseP = minPD + 3000000;
+  doc.getElementById('mpSalaire').value = String(hausseP);
+  doc.getElementById('mpOk').click();
+  egal(S.litResignatures()[cleP].salaire, hausseP, 'Hausse volontaire au-dessus du minimum conservée');
+  // changement de statut : les durées se recalculent
+  const btnP3 = [...doc.querySelectorAll('button.btn-prolong[data-nom]')].find(b=>b.dataset.nom===nomP);
+  btnP3.click();
+  const selSt = doc.getElementById('mpStatut');
+  selSt.value = 'SANS';
+  selSt.dispatchEvent(new W.Event('change'));
+  egal(doc.getElementById('mpDuree').options.length, 1, 'Statut «Sans contrat» → une seule durée offerte (1 an)');
+  doc.getElementById('mpAnnuler').click();
+  ok(doc.getElementById('modalProlong').hidden, 'Annuler ferme la fenêtre');
+  egal(S.litResignatures()[cleP].salaire, hausseP, 'Annuler ne modifie pas la prolongation enregistrée');
+  // retrait
+  const btnP4 = [...doc.querySelectorAll('button.btn-prolong[data-nom]')].find(b=>b.dataset.nom===nomP);
+  btnP4.click();
+  doc.getElementById('mpRetirer').click();
+  ok(!S.litResignatures()[cleP], '«Retirer la prolongation» supprime l\'entrée');
+  jMut.ct = ctAvant;
+  // Gardien à contrat échu : le minimum descend d'un échelon
+  const gMut = S.ETAT.roster.find(x=>!x.backup && x.po==='G');
+  ok(!!gMut, 'Au moins un gardien dans le club');
+  const ctG = gMut.ct;
+  gMut.ct = 0;
+  doc.querySelector('#tableAlignement thead th[data-col="ov"]')?.click(); // re-rendu
+  const btnG = [...doc.querySelectorAll('button.btn-prolong[data-nom]')].find(b=>b.dataset.nom===gMut.nom);
+  ok(!!btnG, 'Gardien à contrat échu : bouton présent');
+  btnG.click();
+  const stG = doc.getElementById('mpStatut').value;
+  const dG = +doc.getElementById('mpDuree').value;
+  const minG = S.salaireMinimum(gMut.ov, stG, gMut.age, dG, 'G');
+  const minGPat = S.salaireMinimum(gMut.ov, stG, gMut.age, dG, 'C');
+  egal(S.parseArgent(doc.getElementById('mpSalaire').value), minG, 'Salaire du gardien pré-rempli à l\'échelon INFÉRIEUR (règle des gardiens)');
+  ok(minG < minGPat || gMut.ov - 1 < 74, 'Minimum gardien plus bas que celui d\'un patineur de même OV (sauf clamp au plancher)');
+  ok(doc.getElementById('mpMin').textContent.includes('gardien'), 'La note d\'échelon explique la règle du gardien');
+  doc.getElementById('mpAnnuler').click();
+  gMut.ct = ctG;
+  doc.querySelector('#tableAlignement thead th[data-col="ov"]')?.click(); // retour à l'état initial
+  W.localStorage.removeItem(S.CLES_LS.resign);
+
+  console.log('— Composition d\'équipe : signés + prolongés, retraits, ajouts, décomptes');
+  {
+    W.localStorage.removeItem(S.CLES_LS.compo);
+    W.localStorage.removeItem(S.CLES_LS.resign);
+    W.document.querySelector('[data-vue="composition"]')?.click();
+    const base = S.joueursComposition();
+    egal(base.length, S.SECOURS_ROSTER.filter(x=>!x.backup && x.ct>0 && !x.horsAlignement).length,
+      'La composition démarre avec tous les joueurs signés de l\'alignement (club-école à part)');
+    ok(base.every(j=>j.prov==='signe'), 'Provenance «signé» pour les contrats en cours');
+    const somme = base.reduce((a,j)=>a+j.salaire,0);
+    const attendu = S.SECOURS_ROSTER.filter(x=>!x.backup && x.ct>0 && !x.horsAlignement).reduce((a,j)=>a+j.salaire,0);
+    egal(somme, attendu, 'Masse de la composition = somme des salaires des signés');
+    ok(W.document.querySelector('#compoSommaire').textContent.includes('Attaquants'), 'Sommaire rendu (attaquants/défenseurs/gardiens)');
+    // décomptes par position
+    const nbA = base.filter(j=>j.po==='C'||j.po==='AG'||j.po==='AD').length;
+    const nbD = base.filter(j=>j.po==='D').length;
+    const nbG = base.filter(j=>j.po==='G').length;
+    egal(nbA + nbD + nbG, base.length, 'Chaque joueur compté dans exactement un groupe de position');
+    // retrait (transigé) puis restauration
+    const cible = base[0].nom;
+    const btnRet = [...W.document.querySelectorAll('#tableCompo .btn-retirer')].find(b=>b.dataset.nom===cible);
+    ok(!!btnRet, 'Bouton «Retirer» sur chaque rangée');
+    btnRet.click();
+    egal(S.joueursComposition().length, base.length-1, 'Le joueur transigé quitte la composition');
+    ok(W.document.querySelector('#compoRetiresListe').textContent.includes(cible), 'Le retiré apparaît dans la liste restaurable');
+    W.document.querySelector('#compoRetiresListe button')?.click();
+    egal(S.joueursComposition().length, base.length, 'Restauration : le joueur revient');
+    // ajout manuel valide
+    W.document.getElementById('caNom').value = 'Acquisition Test';
+    W.document.getElementById('caPo').value = 'D';
+    W.document.getElementById('caOv').value = '81';
+    W.document.getElementById('caSal').value = '4,25 M';
+    W.document.getElementById('caAjouter').click();
+    const ajout = S.joueursComposition().find(j=>j.nom==='Acquisition Test');
+    ok(!!ajout, 'Ajout manuel présent dans la composition');
+    egal(ajout.prov, 'ajout', 'Provenance «ajout»');
+    egal(ajout.salaire, 4250000, 'Salaire de l\'ajout parsé («4,25 M»)');
+    egal(ajout.po, 'D', 'Position de l\'ajout');
+    // validations du formulaire
+    W.document.getElementById('caNom').value = '';
+    W.document.getElementById('caAjouter').click();
+    ok(W.document.getElementById('caErreur').style.display !== 'none', 'Nom manquant → erreur affichée');
+    W.document.getElementById('caNom').value = 'Acquisition Test';
+    W.document.getElementById('caOv').value = '81';
+    W.document.getElementById('caSal').value = '1 M';
+    W.document.getElementById('caAjouter').click();
+    ok(W.document.getElementById('caErreur').textContent.includes('déjà'), 'Doublon refusé');
+    // un ajout retiré est supprimé (pas mis en liste des retirés)
+    const btnRet2 = [...W.document.querySelectorAll('#tableCompo .btn-retirer')].find(b=>b.dataset.nom==='Acquisition Test');
+    btnRet2.click();
+    ok(!S.joueursComposition().find(j=>j.nom==='Acquisition Test'), 'Ajout manuel retiré = supprimé');
+    ok(!S.litCompo().retires.includes(S.normaliserNom('Acquisition Test')), 'Un ajout supprimé ne va pas dans les retirés');
+    // un prolongé (contrat échu re-signé) entre dans la composition avec son salaire de charte
+    const jc = S.ETAT.roster.find(x=>!x.backup && x.po!=='G');
+    const ctAv = jc.ct; jc.ct = 0;
+    W.document.querySelector('[data-vue="alignement"]')?.click();
+    W.document.querySelector('#tableAlignement thead th[data-col="ov"]')?.click();
+    const bpj = [...W.document.querySelectorAll('button.btn-prolong[data-nom]')].find(b=>b.dataset.nom===jc.nom);
+    bpj.click(); W.document.getElementById('mpOk').click();
+    W.document.querySelector('[data-vue="composition"]')?.click();
+    const jpro = S.joueursComposition().find(j=>j.nom===jc.nom);
+    ok(!!jpro && jpro.prov==='prolonge', 'Le prolongé entre dans la composition (provenance «prolongé»)');
+    egal(jpro.salaire, S.litResignatures()[S.normaliserNom(jc.nom)].salaire, 'Avec son salaire de prolongation');
+    // manquants : sous 22 joueurs, le sommaire l'affiche
+    const c22 = S.litCompo();
+    const nbARetirer = Math.max(1, S.joueursComposition().length - 21);
+    c22.retires = S.joueursComposition().slice(0, nbARetirer).map(j=>S.normaliserNom(j.nom));
+    S.ecritCompo(c22); S.rendreComposition();
+    ok(W.document.querySelector('#compoSommaire').textContent.includes('manquant'), 'Sous 22 joueurs → «manquants» affiché');
+    jc.ct = ctAv;
+    W.localStorage.removeItem(S.CLES_LS.compo);
+    W.localStorage.removeItem(S.CLES_LS.resign);
+  }
+
+  console.log('— Parseur de la page «Finances» (contrats à jour, dont les 0 an)');
+  {
+    const fxFin = `<html><body>
+      <p>NASHVILLE 0-0-0 (15e Western)</p>
+      <table><tr><th>JOUEUR</th><th>A</th><th>CONTRAT</th></tr>
+        <tr><td>Jesperi Kotkaniemi</td><td>3</td><td>7 250 000 $</td></tr>
+        <tr><td>Adam Fox</td><td>0</td><td>9 075 000 $</td></tr>
+      </table>
+      <table><tr><th>JOUEUR</th><th>A</th><th>CONTRAT</th></tr>
+        <tr><td>Jeune Espoir</td><td>2</td><td>900 000 $</td></tr>
+      </table></body></html>`;
+    const docF = new W.DOMParser().parseFromString(fxFin, 'text/html');
+    const contrats = S.parseFinance(null, docF);
+    egal(contrats.size, 3, 'Trois contrats lus (pros + club-école)');
+    egal(contrats.get(S.normaliserNom('Adam Fox')).ct, 0, 'Fox : 0 année de contrat (la donnée qui manquait!)');
+    egal(contrats.get(S.normaliserNom('Adam Fox')).salaire, 9075000, 'Salaire de Fox lu');
+    egal(contrats.get(S.normaliserNom('Adam Fox')).clubEcole, false, 'Première table = pros');
+    egal(contrats.get(S.normaliserNom('Jeune Espoir')).clubEcole, true, 'Table suivante = club-école');
+    egal(contrats.get(S.normaliserNom('Jesperi Kotkaniemi')).ct, 3, 'CT de Kotkaniemi synchronisé à 3');
+  }
+
+  console.log('— Divers');
+  egal(S.matchsEquipe(), 0, 'Fiche 0-0-0 → 0 match d\'équipe');
+
+  console.log('— XtraStats en repli de TeamScoring (archive ou saison courante)');
+  const xtraArchiveFixture = [{nom:'Aa', gp:82}, {nom:'Bb', gp:75}];
+  const xtraCourantFixture = [{nom:'Aa', gp:9}, {nom:'Bb', gp:10}];
+  egal(S.xtraEstArchive(xtraArchiveFixture, 0), true, 'Club à 0 match → archive de la saison précédente');
+  egal(S.xtraEstArchive(xtraArchiveFixture, 10), true, 'GP max 82 pour un club à 10 matchs → archive');
+  egal(S.xtraEstArchive(xtraCourantFixture, 10), false, 'GP max 10 pour un club à 10 matchs → saison courante');
+  egal(S.xtraEstArchive(xtraCourantFixture, 82), false, 'Fin de saison : GP max ≈ matchs du club → saison courante');
+  // repli effectif : sans TeamScoring, XtraStats (saison courante) devient la source de production
+  const ETAT = S.ETAT;
+  ok(!!ETAT, 'État global accessible pour la simulation du repli');
+  egal(ETAT.xtra.length, 0, 'Aucune production intégrée à l\'ouverture (cotes seulement)');
+  if (ETAT){
+    const avantArchive = ETAT.xtraArchive, avantScoring = ETAT.scoring, avantXtra = ETAT.xtra;
+    ETAT.xtraArchive = false;           // XtraStats jugé «saison courante»
+    ETAT.scoring = {patineurs:[], gardiens:[]}; // TeamScoring indisponible
+    const jRepli = S.SECOURS_ROSTER.find(x2 => !x2.backup && x2.po !== 'G');
+    ETAT.xtra = [{nom:jRepli.nom, gp:12, goals:4, assists:10, pts:14, shots:28, pim:2, mp:250, hits:11}];
+    const prodRepli = S.productionDe(jRepli);
+    ok(!!prodRepli && prodRepli._xtraSource===true, 'Production servie par XtraStats (drapeau _xtraSource)');
+    egal(prodRepli?.pts, 14, 'Points lus depuis XtraStats en repli');
+    // archive détectée : XtraStats est ignoré, aucune production affichée
+    ETAT.xtraArchive = true;
+    egal(S.productionDe(jRepli), null, 'Archive de la saison précédente ignorée (aucune production)');
+    ETAT.xtraArchive = avantArchive; ETAT.scoring = avantScoring; ETAT.xtra = avantXtra;
+  }
+
+  console.log('— Bouton Effacer la cache');
+  const btnCache = doc.querySelector('#btnEffacerCache');
+  ok(!!btnCache, 'Bouton présent dans l\'en-tête');
+  W.localStorage.setItem(S.CLES_LS.cache, '{"roster":{"t":1,"v":"x"}}');
+  W.localStorage.setItem(S.CLES_LS.proxy, '2');
+  btnCache.click();
+  egal(W.localStorage.getItem(S.CLES_LS.cache), null, 'Cache de données effacée');
+  egal(W.localStorage.getItem(S.CLES_LS.proxy), null, 'Relais préféré réinitialisé');
+  await new Promise(r=>setTimeout(r,100)); // laisser l'actualisation (hors ligne) se terminer proprement
+
+  console.log('— Retrait complet du mode vérification Y21');
+  ok(!doc.querySelector('#btnModeY21'), 'Bouton de bascule retiré de l\'entête');
+  ok(!doc.querySelector('#bandeauY21'), 'Bandeau de vérification retiré');
+  egal(S.ETAT.modeY21, undefined, 'Aucun drapeau de mode dans l\'état global');
+  ok(!html.includes('Y21'), 'Plus aucune mention «Y21» dans le monofichier');
+  ok(doc.querySelector('#prodSous').textContent.includes('Aucun match disputé'),
+     'Sous-titre Production neutre en attente des premiers matchs');
+
+  console.log('— Calculateur OV détaillé : moteur');
+  ok(typeof S.ovDetaille === 'function', 'ovDetaille exposée');
+  tableauEgal(S.OV_ORDRE, ['it','sp','st','en','du','di','sk','pa','pc','df','sc','ex','ld'],
+    'Ordre des cotes IN SP ST EN DU DI SK PA PC DF OF EX LD');
+  // 17 OV détaillés de référence produits par la fonction overall() du classeur Excel
+  const refsOvd = [
+    ['F',[68,85,69,77,79,75,83,71,74,56,75,49,37],76.37,'Lambert'],
+    ['F',[77,71,82,79,79,77,74,78,74,73,78,77,64],80.81,'ErikssonEk'],
+    ['F',[86,78,74,81,75,70,80,79,73,66,80,78,68],81.39,'Konecny'],
+    ['F',[68,81,74,77,75,80,77,72,72,69,75,51,41],77.40,'Olausson'],
+    ['F',[69,79,67,76,70,76,78,77,74,67,74,45,40],76.99,'Tuomaala'],
+    ['F',[64,85,73,87,77,85,86,78,71,69,79,58,58],80.53,'Thomas'],
+    ['F',[66,77,72,76,76,79,77,77,81,63,76,56,41],78.15,'Johnson'],
+    ['F',[65,86,79,87,81,85,89,70,75,61,84,67,58],81.18,'Nylander'],
+    ['F',[62,76,75,77,78,80,78,71,75,62,78,90,75],77.97,'Saad'],
+    ['F',[82,70,94,84,98,79,70,72,69,65,88,60,69],81.96,'Legare'],
+    ['D',[68,70,78,84,68,82,72,73,74,84,62,85,80],79.55,'Brodin'],
+    ['D',[81,73,85,92,89,80,76,66,71,79,58,52,53],80.09,'Schneider'],
+    ['D',[64,84,70,86,83,81,85,86,76,79,70,60,62],82.54,'Fox'],
+    ['D',[73,74,84,94,78,89,81,70,70,80,57,99,78],81.14,'Myers'],
+    ['D',[65,72,82,78,75,79,75,71,72,78,60,70,65],77.84,'Graves'],
+    ['D',[80,70,91,88,86,76,85,75,70,82,67,69,57],83.67,'Fleury'],
+    ['D',[68,74,76,76,74,80,76,71,72,78,61,80,75],77.83,'Schmidt']
+  ];
+  const versCotes = t => Object.fromEntries(S.OV_ORDRE.map((k,i)=>[k,t[i]]));
+  refsOvd.forEach(([g,t,attendu,nom]) => {
+    proche(S.ovDetaille(versCotes(t), g).valeur, attendu, 0.005,
+      `Référence Excel : ${nom} → ${attendu}`);
+  });
+  egal(S.ovDetaille(versCotes([82,70,94,84,98,79,70,72,69,65,88,60,69]),'F').arrondi, 82,
+    'Legare : arrondi 82 (OV affiché sur ushl.ca)');
+  // classement des défenseurs : offensif si PA + OF >= DF + ST
+  ok(S.ovDetaille(versCotes([64,84,70,86,83,81,85,86,76,79,70,60,62]),'D').formule.includes('offensif'),
+    'Fox (PA 86 + OF 70 = 156 ≥ DF 79 + ST 70 = 149) → formule offensive');
+  ok(S.ovDetaille(versCotes([68,70,78,84,68,82,72,73,74,84,62,85,80]),'D').formule.includes('défensif'),
+    'Brodin (PA 73 + OF 62 = 135 < DF 84 + ST 78 = 162) → formule défensive');
+  // cohérence avec l'alignement de secours (hors échantillon de calibration) :
+  // la formule calibrée reproduit l'OV affiché pour la quasi-totalité des patineurs,
+  // avec au plus 1 point d'écart pour les rares exceptions
+  {
+    const pat = S.SECOURS_ROSTER.filter(j => j.po !== 'G');
+    const res = pat.map(j => ({j, r: S.ovDetaille(j, j.po === 'D' ? 'D' : 'F')}));
+    ok(res.every(x => !!x.r), 'Formule calculable pour tous les patineurs');
+    const exacts = res.filter(x => x.r.arrondi === x.j.ov).length;
+    ok(exacts >= Math.ceil(pat.length * 0.85),
+      `Arrondi = OV affiché pour la quasi-totalité (${exacts}/${pat.length})`);
+    ok(res.every(x => Math.abs(x.r.arrondi - x.j.ov) <= 1),
+      'Aucun écart de plus de 1 point entre arrondi et OV affiché');
+  }
+  // ancre 50 partout et gardiens
+  proche(S.ovDetaille(versCotes(Array(13).fill(50)),'F').arrondi, 55, 0,
+    'Patineur 50 partout → OV 55');
+  egal(S.ovDetaille(S.SECOURS_ROSTER.find(j=>j.po==='G'),'F'), null,
+    'Gardien (df et sc nuls) → null : formule non couverte');
+
+  console.log('— Calculateur OV détaillé : interface');
+  ok(!!doc.querySelector('nav button[data-vue="ovdetail"]'), 'Onglet OV détaillé présent');
+  const selOvd = doc.getElementById('ovdJoueur');
+  const nbPatineurs = S.SECOURS_ROSTER.filter(j => j.po !== 'G').length;
+  egal(selOvd.querySelectorAll('option').length, nbPatineurs + 1,
+    'Sélecteur : ' + nbPatineurs + ' patineurs + saisie manuelle (gardiens exclus)');
+  egal(doc.querySelectorAll('#ovdGrille input').length, 13, '13 champs de cotes');
+  const jOvd = S.SECOURS_ROSTER.find(j => !j.backup && j.po !== 'G' && j.po !== 'D');
+  selOvd.value = jOvd.nom;
+  selOvd.dispatchEvent(new W.Event('change'));
+  egal(doc.getElementById('ovdGroupe').value, 'F', jOvd.nom + ' chargé comme attaquant');
+  egal(doc.getElementById('ovd_st').value, String(jOvd.st), 'Cote ST de ' + jOvd.nom + ' chargée');
+  const rOvd = S.ovDetaille(jOvd, 'F');
+  egal(doc.getElementById('ovdArrondi').textContent, String(rOvd.arrondi), 'OV arrondi affiché = calcul de la formule');
+  egal(rOvd.arrondi, jOvd.ov, 'Arrondi = OV publié sur ushl.ca pour ' + jOvd.nom);
+  egal(doc.getElementById('ovdValeur').textContent, rOvd.valeur.toFixed(2).replace('.', ','), 'OV détaillé affiché avec deux décimales');
+  // saisie manuelle : recopier les cotes de la capture Excel de Legare
+  const capLegare = versCotes([82,70,94,84,98,79,70,72,69,65,88,60,69]);
+  S.OV_ORDRE.forEach(k => { doc.getElementById('ovd_'+k).value = capLegare[k]; });
+  doc.getElementById('ovd_it').dispatchEvent(new W.Event('input'));
+  egal(doc.getElementById('ovdValeur').textContent, '81,96', 'Saisie manuelle : Legare du classeur → 81,96');
+  egal(doc.getElementById('ovdArrondi').textContent, '82', 'Saisie manuelle : arrondi 82');
+  // bascule défenseur : la note reflète la formule retenue (offensive ou défensive
+  // selon PA + OF vs DF + ST, testée sur un défenseur réel du club)
+  {
+    const jD = S.SECOURS_ROSTER.find(j=>!j.backup && j.po==='D');
+    selOvd.value = jD.nom;
+    selOvd.dispatchEvent(new W.Event('change'));
+    egal(doc.getElementById('ovdGroupe').value, 'D', jD.nom + ' chargé comme défenseur');
+    const attenteNote = (jD.pa + jD.sc) >= (jD.df + jD.st) ? 'offensif' : 'défensif';
+    ok(doc.getElementById('ovdNote').textContent.includes(attenteNote),
+      `Note : formule ${attenteNote}e appliquée selon les cotes (PA+OF ${jD.pa+jD.sc} vs DF+ST ${jD.df+jD.st})`);
+  }
+  // champ vidé → résultat neutre
+  doc.getElementById('ovd_pa').value = '';
+  doc.getElementById('ovd_pa').dispatchEvent(new W.Event('input'));
+  egal(doc.getElementById('ovdValeur').textContent, '—', 'Cote manquante → aucun résultat');
+
+  console.log('— Calculateur OV détaillé : toute la ligue');
+  const selEqOvd = doc.getElementById('ovdEquipe');
+  ok(!!selEqOvd, 'Sélecteur d\'équipe présent');
+  egal(selEqOvd.querySelectorAll('option').length, S.LIGUE.length,
+    'Les ' + S.LIGUE.length + ' équipes de la ligue sont offertes');
+  egal(selEqOvd.value, 'NASHVILLE', 'Nashville sélectionnée par défaut');
+  egal(selEqOvd.querySelector('option').value, 'NASHVILLE', 'Nashville en tête de liste');
+  selEqOvd.value = 'NEWJERSEY';
+  selEqOvd.dispatchEvent(new W.Event('change'));
+  const patNJ = S.ligueJoueurs('NEWJERSEY').filter(j => j.po !== 'G');
+  egal(selOvd.querySelectorAll('option').length, patNJ.length + 1,
+    'Changement d\'équipe : ' + patNJ.length + ' patineurs du New Jersey + saisie manuelle');
+  const jNJ = patNJ[0];
+  selOvd.value = jNJ.nom;
+  selOvd.dispatchEvent(new W.Event('change'));
+  egal(doc.getElementById('ovdGroupe').value, jNJ.po === 'D' ? 'D' : 'F',
+    jNJ.nom + ' chargé dans le bon groupe');
+  egal(doc.getElementById('ovd_st').value, String(jNJ.st),
+    'Cote ST de ' + jNJ.nom + ' chargée depuis les formations LIGUE');
+  egal(doc.getElementById('ovdArrondi').textContent, String(jNJ.ov),
+    'Arrondi affiché = OV publié pour ' + jNJ.nom);
+  // cohérence à l'échelle de la ligue : chaque patineur retombe sur son OV publié
+  {
+    let ecarts = 0, n = 0;
+    S.LIGUE.forEach(e => e.j.forEach(t => {
+      const j = S.ligueFiche(t);
+      if (j.po === 'G') return;
+      n++;
+      const r = S.ovDetaille(j, j.po === 'D' ? 'D' : 'F');
+      if (!r || r.arrondi !== j.ov) ecarts++;
+    }));
+    egal(ecarts, 0, 'OV détaillé arrondi = OV publié pour les ' + n + ' patineurs de la ligue');
+  }
+  // retour à Nashville : la liste redevient celle de l'alignement
+  selEqOvd.value = 'NASHVILLE';
+  selEqOvd.dispatchEvent(new W.Event('change'));
+  egal(selOvd.querySelectorAll('option').length, nbPatineurs + 1,
+    'Retour à Nashville : la liste redevient celle de l\'alignement');
+
+  console.log('— Alignement des trios (règlements 1.1.1 et 1.1.2)');
+  // bassin de test : signés du club + ajouts (6 attaquants, 2 défenseurs, 2 gardiens)
+  // Bassin déterministe, indépendant de l'équipe : on retire les signés du club
+  // et on peuple la Composition d'un effectif synthétique fixe (6C, 4AG, 3AD, 6D, 2G).
+  W.localStorage.setItem(S.CLES_LS.trios, JSON.stringify(S.TRIOS_VIDES()));
+  W.localStorage.removeItem(S.CLES_LS.resign);
+  const signesClub = S.SECOURS_ROSTER.filter(j=>!j.backup && j.ct>0).map(j=>S.normaliserNom(j.nom));
+  const ajoutsTrios = [];
+  const groupesAjouts = [['C',6,84],['AG',4,80],['AD',3,78],['D',6,79],['G',2,80]];
+  const NOMS_AJOUTS = {C:'Centre', AG:'AilierG', AD:'AilierD', D:'Defenseur', G:'Gardien'};
+  const NUMS = ['Un','Deux','Trois','Quatre','Cinq','Six'];
+  for (const [po,n,ovBase] of groupesAjouts)
+    for (let x=0;x<n;x++)
+      ajoutsTrios.push({nom:`${NOMS_AJOUTS[po]} ${NUMS[x]}`, po, ov:ovBase-x*2, salaire:1000000});
+  W.localStorage.setItem(S.CLES_LS.compo, JSON.stringify({retires: signesClub, ajouts: ajoutsTrios}));
+  const poolTrios = S.joueursComposition();
+  egal(poolTrios.filter(j=>j.po==='G').length, 2, 'Bassin déterministe : 2 gardiens');
+  egal(poolTrios.filter(j=>j.po!=='G').length, 19, 'Bassin déterministe : 19 patineurs (6C, 4AG, 3AD, 6D)');
+  ok(!!doc.querySelector('nav button[data-vue="trios"]'), 'Onglet Trios présent dans la navigation');
+  S.rendreTrios();
+  const tuilesF = [...doc.querySelectorAll('#vue-trios button.tuile[data-zone="trio"]')];
+  const tuilesD = [...doc.querySelectorAll('#vue-trios button.tuile[data-zone="duo"]')];
+  const tuilesG = [...doc.querySelectorAll('#vue-trios button.tuile[data-zone="g"]')];
+  egal(tuilesF.length, 12, '12 tuiles d\'attaquants (4 trios)');
+  egal(tuilesD.length, 6, '6 tuiles de défenseurs (3 duos)');
+  egal(tuilesG.length, 2, 'Tuiles du partant et du substitut');
+  ok(tuilesF.every(t=>t.classList.contains('vide')), 'Tuiles vides au départ (état «+ Choisir»)');
+  const poDe = nom => poolTrios.find(p=>p.nom===nom)?.po;
+  const choixDe = ()=>[...doc.querySelectorAll('#tuileModalListe button.choix-joueur')].map(b=>b.dataset.nom).filter(Boolean);
+  tuilesG[0].click();
+  ok(doc.getElementById('tuileModalFond').hidden === false, 'Clic sur une tuile : le sélecteur s\'ouvre');
+  ok(choixDe().every(n=>poDe(n)==='G'), 'Tuiles de gardiens : seuls des gardiens offerts (art. 1.1.1)');
+  ok(doc.getElementById('tuileModalTitre').textContent.includes('partant'), 'Titre du sélecteur : la case visée');
+  doc.getElementById('tuileModalX').click();
+  ok(doc.getElementById('tuileModalFond').hidden === true, 'Fermeture du sélecteur par le ×');
+  tuilesF[0].click();
+  ok(choixDe().every(n=>poDe(n)!=='G'), 'Tuiles de patineurs : aucun gardien offert (art. 1.1.1)');
+  ok(choixDe().some(n=>poDe(n)==='D'), 'Un défenseur peut être placé à l\'attaque (position libre, art. 1.1.1)');
+  doc.getElementById('tuileModalX').click();
+
+  // validation pure : construire un alignement complet légal
+  const attq = poolTrios.filter(j=>S.EST_ATTAQUANT ? S.EST_ATTAQUANT(j.po) : (j.po==='C'||j.po==='AG'||j.po==='AD')).map(j=>j.nom);
+  const defs = poolTrios.filter(j=>j.po==='D').map(j=>j.nom);
+  const pats = poolTrios.filter(j=>j.po!=='G').map(j=>j.nom);
+  const gars = poolTrios.filter(j=>j.po==='G').sort((a,b)=>b.ov-a.ov).map(j=>j.nom);
+  const patsRestants = pats.filter(n=>!attq.slice(0,12).includes(n));
+  const legal = {
+    trios: [attq.slice(0,3), attq.slice(3,6), attq.slice(6,9), attq.slice(9,12)],
+    duos: [patsRestants.slice(0,2), patsRestants.slice(2,4), patsRestants.slice(4,6)],
+    gardiens: [gars[0], gars[1]]
+  };
+  let v = S.validerAlignementTrios(legal, poolTrios);
+  egal(v.erreurs.length, 0, 'Alignement complet de 20 cases : aucune infraction');
+  egal(v.nbRemplis, 20, '20 cases remplies');
+  egal(v.nbDistincts, 20, '20 joueurs distincts');
+  ok(v.horsPosition >= 1, 'Patineurs hors position naturelle comptés à titre indicatif (permis)');
+
+  // double quart légal : trio 1 et trio 4 (art. 1.1.2)
+  const dq = JSON.parse(JSON.stringify(legal));
+  dq.trios[3][2] = dq.trios[0][0];
+  v = S.validerAlignementTrios(dq, poolTrios);
+  egal(v.erreurs.length, 0, 'Double quart 1-4 : permis (art. 1.1.2)');
+  ok(v.avertissements.some(a=>a.includes('20 habillés')), 'Rappel des 20 habillés quand le double quart est utilisé');
+
+  // double quart illégal : trios 2 et 3
+  const dq23 = JSON.parse(JSON.stringify(legal));
+  dq23.trios[2][2] = dq23.trios[1][0];
+  v = S.validerAlignementTrios(dq23, poolTrios);
+  ok(v.erreurs.length===1 && v.erreurs[0].includes('1-4, 2-4 et 3-4'), 'Double quart 2-3 : infraction (art. 1.1.2)');
+
+  // trois trios pour un même joueur
+  const dq3 = JSON.parse(JSON.stringify(legal));
+  dq3.trios[1][1] = dq3.trios[0][0]; dq3.trios[3][1] = dq3.trios[0][0];
+  v = S.validerAlignementTrios(dq3, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('se limite à deux lignes')), 'Trois trios pour un même joueur : infraction');
+
+  // même joueur deux fois dans le même trio
+  const memeTrio = JSON.parse(JSON.stringify(legal));
+  memeTrio.trios[0][1] = memeTrio.trios[0][0];
+  v = S.validerAlignementTrios(memeTrio, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('Trio 1')), 'Même joueur deux fois dans un trio : infraction');
+
+  // défenseur dans deux duos
+  const duoDouble = JSON.parse(JSON.stringify(legal));
+  duoDouble.duos[1][0] = duoDouble.duos[0][0];
+  v = S.validerAlignementTrios(duoDouble, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('duos')), 'Défenseur dans deux duos : infraction (aucune 4e paire, art. 1.1.2)');
+
+  // gardiens : identiques, ou hors du filet
+  const gDouble = JSON.parse(JSON.stringify(legal));
+  gDouble.gardiens = [gars[0], gars[0]];
+  v = S.validerAlignementTrios(gDouble, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('différents')), 'Partant = substitut : infraction');
+  const gAttaque = JSON.parse(JSON.stringify(legal));
+  gAttaque.trios[3][2] = gars[1];
+  v = S.validerAlignementTrios(gAttaque, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('case de patineur')), 'Gardien placé à l\'attaque : infraction (art. 1.1.1)');
+
+  // patineur en attaque ET en défense : avertissement, pas d'infraction
+  const mixte = JSON.parse(JSON.stringify(legal));
+  mixte.duos[0][0] = mixte.trios[0][0];
+  v = S.validerAlignementTrios(mixte, poolTrios);
+  ok(v.avertissements.some(a=>a.includes('attaque ET en défense')) , 'Attaque et défense à la fois : avertissement');
+
+  // joueur disparu de la composition
+  const fantome = JSON.parse(JSON.stringify(legal));
+  fantome.trios[0][0] = 'Joueur Fantome';
+  v = S.validerAlignementTrios(fantome, poolTrios);
+  ok(v.avertissements.some(a=>a.includes('plus dans la composition')), 'Joueur retiré de la composition : avertissement');
+
+  // persistance : placer un joueur par le sélecteur, puis libérer la case
+  tuilesG[0].click();
+  [...doc.querySelectorAll('#tuileModalListe button.choix-joueur')].find(b=>b.dataset.nom===gars[0]).click();
+  ok((W.localStorage.getItem(S.CLES_LS.trios)||'').includes(gars[0]), 'Choix sauvegardé dans la mémoire locale');
+  const svgG = tuilesG[0].querySelector('svg.chandail');
+  ok(!!svgG, 'La tuile porte un chandail SVG');
+  const textesG = [...svgG.querySelectorAll('text')].map(t=>t.textContent);
+  ok(textesG.includes(gars[0].split(' ').pop().toUpperCase()), 'Plaque du chandail : nom de famille du joueur placé');
+  const ovG = poolTrios.find(p=>p.nom===gars[0]).ov;
+  ok(textesG.includes(String(ovG)), 'Numéro dans le dos = OV du joueur');
+  ok(tuilesG[0].title.includes(gars[0]), 'Infobulle : nom complet du joueur');
+  ok(!tuilesG[0].classList.contains('vide'), 'La tuile n\'est plus marquée vide');
+  const svgVide = tuilesF[0].querySelector('svg.chandail');
+  ok(!!svgVide && [...svgVide.querySelectorAll('text')].some(t=>t.textContent==='CHOISIR'),
+     'Tuile vide : chandail neutre marqué CHOISIR');
+  tuilesG[0].click();
+  const btnLiberer = doc.querySelector('#tuileModalListe button.choix-joueur.liberer');
+  ok(!!btnLiberer, 'Option «Libérer la case» offerte quand la tuile est occupée');
+  btnLiberer.click();
+  ok(tuilesG[0].classList.contains('vide'), 'Case libérée : la tuile redevient vide');
+
+  // proposition automatique par OV
+  doc.getElementById('btnTriosProposer').click();
+  const propose = S.litTrios();
+  v = S.validerAlignementTrios(propose, poolTrios);
+  egal(v.nbRemplis, 20, 'Proposition automatique : 20 cases remplies');
+  egal(v.erreurs.length, 0, 'Proposition automatique : aucune infraction');
+  egal(propose.gardiens[0], gars[0], 'Partant proposé = meilleur OV des gardiens');
+  ok(propose.trios.flat().every(n=>poDe(n)!=='G'), 'Aucun gardien dans les trios proposés');
+  ok(propose.trios.flat().filter(Boolean).every(n=>['C','AG','AD'].includes(poDe(n))),
+     'Proposition : aucun défenseur placé à l\'attaque');
+  ok(propose.duos.flat().filter(Boolean).every(n=>poDe(n)==='D'),
+     'Proposition : duos réservés aux défenseurs naturels');
+  egal(v.horsPosition, 0, 'Proposition : zéro joueur hors position naturelle');
+  const colAD = propose.trios.map(t=>t[2]);
+  egal(colAD.filter(n=>poDe(n)==='AD').length, 3, 'Colonne AD : les 3 ailiers droits naturels d\'abord');
+  ok(['C','AG'].includes(poDe(colAD.find(n=>poDe(n)!=='AD'))),
+     'Case AD sans titulaire naturel : complétée par un autre attaquant inutilisé');
+
+  // vider
+  doc.getElementById('btnTriosVider').click();
+  ok(S.litTrios().trios.flat().every(n=>!n), 'Bouton Vider : toutes les cases libérées');
+
+  // ---- Unités spéciales ----
+  console.log('— Unités spéciales (2 vagues par groupe, positions libres)');
+  egal(doc.querySelectorAll('#vue-trios button.tuile[data-zone="an5"]').length, 10, 'AN à 5 : 2 vagues de 5 cases');
+  egal(doc.querySelectorAll('#vue-trios button.tuile[data-zone="an4"]').length, 8, 'AN à 4 : 2 vagues de 4 cases');
+  egal(doc.querySelectorAll('#vue-trios button.tuile[data-zone="in4"]').length, 8, 'IN à 4 : 2 vagues de 4 cases');
+  egal(doc.querySelectorAll('#vue-trios button.tuile[data-zone="in3"]').length, 6, 'IN à 3 : 2 vagues de 3 cases');
+  egal(doc.querySelectorAll('#vue-trios button.tuile').length, 52, '52 tuiles au total (20 à 5c5 + 32 spéciales)');
+  doc.querySelector('#vue-trios button.tuile[data-zone="an5"]').click();
+  ok(choixDe().every(n=>poDe(n)!=='G'), 'Aucun gardien offert sur les unités spéciales');
+  doc.getElementById('tuileModalX').click();
+
+  // 5 attaquants sur une vague d'AN : permis (positions sans importance)
+  const cinqAv = JSON.parse(JSON.stringify(legal));
+  cinqAv.an5 = [attq.slice(0,5), attq.slice(5,10)];
+  v = S.validerAlignementTrios(cinqAv, poolTrios);
+  egal(v.erreurs.length, 0, 'Cinq attaquants sur une vague d\'AN à 5 : aucune infraction (positions libres)');
+  egal(v.specRemplis, 10, 'Cases spéciales remplies comptées (10/32)');
+
+  // même joueur sur les 2 vagues d'un même groupe : interdit
+  const deuxVagues = JSON.parse(JSON.stringify(cinqAv));
+  deuxVagues.an5[1][0] = deuxVagues.an5[0][0];
+  v = S.validerAlignementTrios(deuxVagues, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('2 vagues')), 'Joueur sur les 2 vagues de l\'AN à 5 : infraction (art. 1.1.2)');
+  const deuxVaguesIn = JSON.parse(JSON.stringify(legal));
+  deuxVaguesIn.in3 = [[defs[0], defs[1], attq[0]], [defs[0], attq[1], attq[2]]];
+  v = S.validerAlignementTrios(deuxVaguesIn, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('2 vagues') && e.includes('infériorité')), 'Joueur sur les 2 vagues de l\'IN à 3 : infraction');
+
+  // même joueur deux fois dans la même vague
+  const dupVague = JSON.parse(JSON.stringify(legal));
+  dupVague.an4 = [[attq[0], attq[0], attq[1], attq[2]], ['','','','']];
+  v = S.validerAlignementTrios(dupVague, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('vague 1')), 'Même joueur deux fois dans une vague : infraction');
+
+  // gardien sur une unité spéciale : infraction
+  const gSpec = JSON.parse(JSON.stringify(legal));
+  gSpec.in4 = [[gars[1], defs[0], defs[1], attq[0]], ['','','','']];
+  v = S.validerAlignementTrios(gSpec, poolTrios);
+  ok(v.erreurs.some(e=>e.includes('case de patineur')), 'Gardien sur une unité spéciale : infraction (art. 1.1.1)');
+
+  // joueur des unités spéciales absent des 20 habillés : avertissement
+  const nonHabille = JSON.parse(JSON.stringify(legal));
+  nonHabille.trios[3][2] = '';
+  const excluReel = pats.find(n=>!nonHabille.trios.flat().includes(n) && !nonHabille.duos.flat().includes(n));
+  ok(!!excluReel, 'Un patineur non habillé disponible pour le scénario');
+  nonHabille.an5 = [[excluReel, '', '', '', ''], ['','','','','']];
+  v = S.validerAlignementTrios(nonHabille, poolTrios);
+  ok(v.avertissements.some(a=>a.includes('sans être parmi les habillés')), 'Unité spéciale avec un joueur non habillé : avertissement');
+
+  // proposition automatique : la feuille complète, unités spéciales incluses
+  doc.getElementById('btnTriosProposer').click();
+  const feuille = S.litTrios();
+  v = S.validerAlignementTrios(feuille, poolTrios);
+  egal(v.specRemplis, 32, 'Proposition automatique : 32 cases spéciales remplies');
+  egal(v.erreurs.length, 0, 'Proposition automatique : aucune infraction, spéciales incluses');
+  ok(!v.avertissements.some(a=>a.includes('sans être parmi les habillés')),
+     'Unités spéciales proposées à même les 20 habillés');
+  for (const z of ['an5','an4','in4','in3']){
+    const v1 = new Set(feuille[z][0].filter(Boolean));
+    ok(feuille[z][1].filter(Boolean).every(n=>!v1.has(n)), `Proposition ${z.toUpperCase()} : aucun joueur sur les 2 vagues`);
+  }
+  doc.getElementById('btnTriosVider').click();
+  ok(['an5','an4','in4','in3'].every(z=>S.litTrios()[z].flat().every(n=>!n)), 'Vider libère aussi les unités spéciales');
+
+  // ---- Glisser-déposer ----
+  console.log('— Glisser-déposer (banc des joueurs, double quart, échanges)');
+  const banc = doc.getElementById('bancJoueurs');
+  ok(!!banc, 'Banc des joueurs présent');
+  egal(banc.querySelectorAll('.banc-joueur').length, poolTrios.length, 'Le banc offre tous les joueurs de la Composition');
+  ok([...banc.querySelectorAll('.banc-joueur')].every(b=>b.getAttribute('draggable')==='true' && !b.querySelector('svg')),
+     'Chaque joueur du banc : libellé texte glissable, sans chandail');
+  ok([...banc.querySelectorAll('.banc-joueur')].every(b=>{
+      const j = poolTrios.find(p=>p.nom===b.dataset.nom);
+      return j && b.textContent.trim().startsWith(`${j.po} - ${j.nom}`) && b.textContent.includes(`(${j.ov})`);
+    }), 'Banc : chaque libellé = PO - Nom (OV)');
+  // le chandail n'apparaît qu'une fois le joueur déposé sur une case
+  console.log('— Mise en page : attaque | défense+gardiens, unités spéciales plus bas');
+  const rangees5c5 = doc.querySelectorAll('#vue-trios .trios-colonnes');
+  egal(rangees5c5.length, 2, 'Deux rangées de colonnes (5c5 en haut, spéciales en bas)');
+  const [rang5c5, rangSpec] = rangees5c5;
+  ok(rang5c5.children[0].textContent.includes('Attaque') && !rang5c5.children[0].textContent.includes('Défense'),
+     'Colonne de gauche : les trios d\'attaque');
+  ok(rang5c5.children[1].textContent.includes('Défense') && rang5c5.children[1].textContent.includes('Gardiens'),
+     'Colonne de droite : duos de défenseurs et gardiens');
+  egal(rangSpec.id, 'uniteSpeciales', 'Les unités spéciales forment la rangée du bas');
+  ok(rangSpec.children[0].textContent.includes('Avantage numérique à 5') && rangSpec.children[0].textContent.includes('Avantage numérique à 4'),
+     'AN à 5 et à 4 regroupés à gauche des spéciales');
+  ok(rangSpec.children[1].textContent.includes('Infériorité numérique à 4') && rangSpec.children[1].textContent.includes('Infériorité numérique à 3'),
+     'IN à 4 et à 3 regroupés à droite des spéciales');
+  ok(rang5c5.compareDocumentPosition(rangSpec) & 4, 'Les spéciales viennent après le 5 contre 5');
+  const evt = (type)=>new W.Event(type, {bubbles:true, cancelable:true});
+  const bancDe = nom => [...banc.querySelectorAll('.banc-joueur')].find(b=>b.dataset.nom===nom);
+  const tuileDe = (zone,i,k)=>doc.querySelector(`#vue-trios button.tuile[data-zone="${zone}"][data-i="${i}"][data-k="${k}"]`);
+  const glisser = (source, cible)=>{ source.dispatchEvent(evt('dragstart')); cible.dispatchEvent(evt('drop')); };
+
+  const at1 = attq[0];
+  glisser(bancDe(at1), tuileDe('trio',0,0));
+  egal(S.litTrios().trios[0][0], at1, 'Banc → T1 : joueur placé et sauvegardé');
+  ok(tuileDe('trio',0,0).getAttribute('draggable')==='true', 'Tuile occupée : glissable');
+  ok(bancDe(at1).classList.contains('utilise') && bancDe(at1).title.includes('T1'),
+     'Banc : le joueur placé est estompé et son infobulle indique T1');
+  ok(tuileDe('trio',0,0).querySelector('svg.chandail'), 'Le chandail apparaît sur la case après le dépôt');
+
+  glisser(bancDe(at1), tuileDe('trio',3,0));
+  egal(S.litTrios().trios[3][0], at1, 'Reprise du banc → T4 : double quart posé');
+  egal(S.litTrios().trios[0][0], at1, 'Le joueur reste sur T1 (copie, pas déplacement)');
+  egal(S.validerAlignementTrios(S.litTrios(), poolTrios).erreurs.length, 0, 'Double quart 1-4 par glisser : conforme');
+
+  glisser(bancDe(at1), tuileDe('an5',0,0));
+  egal(S.litTrios().an5[0][0], at1, 'Reprise du banc → AN à 5 : joueur posé sur la vague');
+  ok(bancDe(at1).title.includes('AN'), 'Banc : infobulle enrichie de l\'étiquette AN');
+
+  const at2 = attq[1];
+  glisser(bancDe(at2), tuileDe('trio',0,1));
+  glisser(tuileDe('trio',0,0), tuileDe('trio',0,1));
+  egal(S.litTrios().trios[0][1], at1, 'Tuile → tuile : le joueur glissé prend la case');
+  egal(S.litTrios().trios[0][0], at2, 'Échange : l\'occupant précédent prend la case d\'origine');
+
+  glisser(tuileDe('trio',3,0), banc);
+  egal(S.litTrios().trios[3][0], '', 'Tuile redéposée sur le banc : case libérée');
+
+  glisser(bancDe(gars[0]), tuileDe('trio',2,0));
+  egal(S.litTrios().trios[2][0], '', 'Gardien glissé à l\'attaque : refusé (art. 1.1.1)');
+  glisser(bancDe(at2), tuileDe('g',0,0));
+  egal(S.litTrios().gardiens[0], '', 'Patineur glissé au filet : refusé (art. 1.1.1)');
+  glisser(bancDe(gars[1]), tuileDe('g',0,0));
+  egal(S.litTrios().gardiens[0], gars[1], 'Gardien glissé au filet : accepté');
+
+  doc.getElementById('btnTriosVider').click();
+
+  W.localStorage.removeItem(S.CLES_LS.compo);
+  W.localStorage.removeItem(S.CLES_LS.trios);
+
+  console.log('— Charte salariale officielle Y22 (transcription fidèle de la charte publiée, cap 104 M)');
+  tableauEgal(S.CHARTE_SALAIRE.RFA,
+    [700,775,825,950,2250,3750,5750,7500,8750,10500,12250,13750,15500,17500],
+    'Colonne RFA 28 ans et - (6.4.1)');
+  tableauEgal(S.CHARTE_SALAIRE.UFA_34,
+    [900,950,1150,1500,2250,3500,5000,6250,7500,8750,10250,12000,13500,15500],
+    'Colonne UFA 34 ans et - (6.4.2)');
+  tableauEgal(S.CHARTE_SALAIRE.UFA_35,
+    [900,900,1000,1100,1750,2250,3250,4250,5000,6000,7250,8750,10000,11500],
+    'Colonne UFA 35 et + (6.4.2)');
+  tableauEgal(S.CHARTE_SALAIRE.UFAR2_34,
+    [900,900,950,1150,1500,2500,3500,5000,6250,7500,8750,10250,12000,13500],
+    'Colonne UFA Ronde 2 34 ans et - (6.4.3)');
+  tableauEgal(S.CHARTE_SALAIRE.UFAR2_35,
+    [900,900,900,1000,1100,1750,2250,3250,4250,5000,6000,7250,8750,10000],
+    'Colonne UFA Ronde 2 35 et + (6.4.3)');
+  tableauEgal(S.CHARTE_SALAIRE.SANS_34,
+    [900,900,900,950,1150,1500,2500,3500,5000,6250,7500,8750,10250,12000],
+    'Colonne Sans contrat 34 ans et - (6.4.4)');
+  tableauEgal(S.CHARTE_SALAIRE.SANS_35,
+    [900,900,900,900,1000,1100,1750,2250,3250,4250,5000,6000,7250,8750],
+    'Colonne Sans contrat 35 et + (6.4.4) — OV 77 et 87+ selon la charte officielle, OV 85 à 6 000 (coquille du document corrigée)');
+
+  console.log('— Verdicts face à la charte');
+  const vThp = S.verdictCharte(S.ETAT.roster.find(j=>j.nom==='Tage Thompson'), 'UFA', 1);
+  egal(vThp.code, 'surpaye', 'Tage Thompson (C, OV 82, 29 ans, 10,625 M, UFA) → Surpayé');
+  egal(vThp.minEff, 7500000, 'Charte Thompson : 7 500 000 $');
+  egal(vThp.ecart, 3125000, 'Écart Thompson : +3 125 000 $');
+  const vBou = S.verdictCharte(S.ETAT.roster.find(j=>j.nom==='Mavrik Bourque'), 'RFA', 1);
+  egal(vBou.code, 'aubaine', 'Mavrik Bourque (C, OV 81, 24 ans, 5,325 M, RFA) → Aubaine salariale');
+  egal(vBou.ecart, 2175000, 'Écart Bourque : −2 175 000 $ sous la charte (7,5 M)');
+  const vHre = S.verdictCharte(S.ETAT.roster.find(j=>j.nom==='Aidan Hreschuk'), 'RFA', 1);
+  egal(vHre.code, 'aubaine', 'Aidan Hreschuk (D, OV 75, 23 ans, 700 k, RFA, club-école) → Aubaine salariale');
+  egal(vHre.ecart, 75000, 'Écart Hreschuk : −75 000 $ sous la charte (775 k)');
+  const vExact = S.verdictCharte({nom:'Témoin', po:'C', ov:80, age:26, salaire:5750000, ct:1}, 'RFA', 1);
+  egal(vExact.code, 'charte', 'Patineur au salaire exact de sa case (OV 80 RFA, 5,75 M) → Sur la charte');
+  egal(vExact.ecart, 0, 'Aucun écart pour un contrat sur la charte');
+
+  console.log('— Règle des gardiens : échelon OV −1, peu importe la charte');
+  const vIng = S.verdictCharte(S.ETAT.roster.find(j=>j.nom==='Connor Ingram'), 'UFA', 1);
+  egal(vIng.minEff, 1150000, 'Connor Ingram (G, OV 77, 29 ans) évalué à l\'échelon 76 : 1 150 000 $');
+  egal(vIng.code, 'aubaine', 'Connor Ingram à 1 000 100 $ → Aubaine salariale');
+  const vSam = S.verdictCharte(S.ETAT.roster.find(j=>j.nom==='Ilya Samsonov'), 'UFA', 1);
+  egal(vSam.minEff, 12000000, 'Ilya Samsonov (G, OV 86, 29 ans) évalué à l\'échelon 85 : 12 000 000 $');
+  egal(vSam.code, 'surpaye', 'Samsonov à 12,2 M → Surpayé (+200 000 $ contre l\'échelon gardien)');
+  const gRabais = {nom:'G témoin', po:'G', ov:80, age:30, salaire:3500000, ct:1};
+  const vRab = S.verdictCharte(gRabais, 'UFA', 1);
+  egal(vRab.code, 'charte', 'Gardien payé à l\'échelon OV −1 (3,5 M pour OV 80 UFA) → Sur la charte');
+  ok(vRab.detail.includes('rabais gardien'), 'Note du rabais gardien affichée');
+  const vPlein = S.verdictCharte({...gRabais, salaire:5000000}, 'UFA', 1);
+  egal(vPlein.code, 'charte', 'Gardien payé à l\'échelon plein (5 M pour OV 80 UFA) → Sur la charte');
+  ok(vPlein.detail.includes('échelon plein'), 'Note de l\'échelon plein affichée');
+  egal(S.verdictCharte({...gRabais, salaire:5100000}, 'UFA', 1).code, 'surpaye',
+    'Gardien au-dessus de l\'échelon plein → Surpayé');
+  egal(S.verdictCharte({...gRabais, salaire:3400000}, 'UFA', 1).code, 'aubaine',
+    'Gardien sous l\'échelon gardien → Aubaine salariale');
+  egal(S.salaireMinimum(74, 'UFA', 32, 1, 'G'), 900000,
+    'Gardien OV 74 : échelon 73 borné à la ligne 74- (900 k)');
+
+  console.log('— Bornes et bonus d\'échelon');
+  egal(S.salaireMinimum(90, 'RFA', 24, 1, 'C'), 17500000, 'OV 90 borné à la ligne 87+ (RFA : 17,5 M)');
+  egal(S.salaireMinimum(78, 'RFA', 24, 5, 'C'), 5750000, 'RFA 5 ans : échelon 78+2=80 (5,75 M)');
+  egal(S.rangCharte(74), 0, 'Rang de la ligne 74-');
+  egal(S.rangCharte(87), 13, 'Rang de la ligne 87+');
+  egal(S.etiquetteOvCharte(0), '74-', 'Étiquette de la première ligne');
+  egal(S.etiquetteOvCharte(13), '87+', 'Étiquette de la dernière ligne');
+  egal(S.verdictCharte({nom:'Backup_C', po:'C', ov:55, age:25, salaire:0, ct:0, backup:true}, 'RFA', 1), null,
+    'Les joueurs de remplacement (backup) sont inanalysables');
+  ok(S.SECOURS_ROSTER.every(j=>!j.backup),
+    'Aucun joueur de remplacement dans l\'alignement NASHVILLE relevé le 2 octobre');
+
+  console.log('— Vue Charte salariale (DOM)');
+  const btnCharte = doc.querySelector('nav button[data-vue="charte"]');
+  ok(!!btnCharte, 'Bouton de navigation «Charte salariale» présent');
+  ok(!!doc.getElementById('vue-charte'), 'Section vue-charte présente');
+  btnCharte.click();
+  ok(doc.getElementById('vue-charte').classList.contains('actif'), 'La vue Charte s\'active au clic');
+  egal(doc.querySelectorAll('#csTableau tbody tr').length, 14, '14 lignes d\'OV (74- à 87+) dans le tableau');
+  egal(doc.querySelectorAll('#csTableau tbody tr:first-child td').length, 8, '8 cellules par ligne (OV + 7 colonnes)');
+  const nbAnalysables = S.ETAT.roster.filter(j=>!j.backup && j.salaire>0).length;
+  egal(doc.querySelectorAll('#csApercu tbody tr').length, nbAnalysables,
+    'Aperçu de l\'alignement : ' + nbAnalysables + ' contrats analysés');
+
+  const selJoueur = doc.getElementById('csJoueur');
+  selJoueur.value = 'Tage Thompson';
+  selJoueur.dispatchEvent(new W.Event('change'));
+  ok(doc.getElementById('csVerdict').classList.contains('surpaye'), 'Thompson sélectionné : badge Surpayé');
+  ok(doc.getElementById('csVerdict').textContent.includes('Surpayé'), 'Libellé «Surpayé» affiché');
+  const celluleActive = doc.querySelector('#csTableau td.cs-actif');
+  ok(!!celluleActive, 'Cellule applicable mise en surbrillance dans le tableau');
+  egal(celluleActive.textContent.replace(/[\s\u00a0\u202f]/g,''), '7500$',
+    'Cellule active : 7 500 $ (UFA 34-, OV 82)');
+  egal(doc.getElementById('csStatut').value, 'UFA', 'Charte UFA proposée d\'après l\'âge (29 ans)');
+  selJoueur.value = 'Mavrik Bourque';
+  selJoueur.dispatchEvent(new W.Event('change'));
+  egal(doc.getElementById('csStatut').value, 'RFA', 'Charte RFA proposée d\'après l\'âge (24 ans)');
+
+  doc.getElementById('csStatut').value = 'UFAR2';
+  doc.getElementById('csStatut').dispatchEvent(new W.Event('change'));
+  egal(doc.querySelectorAll('#csDuree option').length, 2, 'UFA Ronde 2 : durées limitées à 1-2 ans');
+  doc.getElementById('csStatut').value = 'SANS';
+  doc.getElementById('csStatut').dispatchEvent(new W.Event('change'));
+  egal(doc.querySelectorAll('#csDuree option').length, 1, 'Sans contrat : 1 an seulement');
+
+  selJoueur.value = 'Connor Ingram';
+  selJoueur.dispatchEvent(new W.Event('change'));
+  ok(doc.getElementById('csVerdict').classList.contains('aubaine'), 'Connor Ingram : badge Aubaine salariale');
+  ok(doc.querySelector('#csFiche').textContent.includes('76'), 'Échelon gardien (OV −1 → 76) affiché dans la fiche');
+  ok(doc.querySelectorAll('#csTableau tr.cs-rang-actif').length === 1, 'Une seule ligne d\'OV en surbrillance');
+
+
+  /* ============ CONSTRUCTEUR DE TRANSACTION ============ */
+  console.log('— Données de la ligue (USHL22.ros)');
+  W.localStorage.removeItem('nsh_resignatures_v1');
+  W.localStorage.removeItem('nsh_transac_v1');
+  egal(S.LIGUE.length, 32, '32 formations dans le fichier');
+  egal(S.LIGUE.reduce((s2,e)=>s2+e.j.length,0), 669,
+    '669 joueurs au total (bloc NASHVILLE du relevé du 2 octobre, Maenpaa retiré du bloc TAMPABAY)');
+  egal(new Set(S.LIGUE.map(e=>e.c)).size, 32, 'Aucun code d\'équipe en double');
+  ok(S.LIGUE.every(e=>e.n && e.n.length>2), 'Chaque équipe porte un nom lisible');
+  tableauEgal(S.LIGUE_COLS,
+    ['nom','po','hd','it','sp','st','en','du','di','sk','pa','pc','df','sc','ex','ld','ov','age','salaire','ct'],
+    'Colonnes des fiches compactes dans l\'ordre attendu');
+  ok(S.LIGUE.every(e=>e.j.every(t=>t.length===S.LIGUE_COLS.length)),
+    'Toutes les fiches ont le bon nombre de colonnes');
+  const tousNoms = S.LIGUE.flatMap(e=>e.j.map(t=>t[0]));
+  egal(new Set(tousNoms).size, tousNoms.length, 'Aucun joueur en double dans la ligue');
+  ok(S.LIGUE.every(e=>e.j.every(t=>t[19]>=0 && t[18]>0)), 'Aucun salaire nul, aucun contrat négatif');
+
+  const sjLigue = S.ligueJoueurs('NASHVILLE');
+  egal(sjLigue.length, ATTENDU.taille, 'Le bloc NASHVILLE compte ' + ATTENDU.taille + ' joueurs');
+  tableauEgal(sjLigue.map(j=>j.nom).sort(), S.SECOURS_ROSTER.map(j=>j.nom).sort(),
+    'Le bloc NASHVILLE et la formation de secours listent les mêmes joueurs');
+  ok(sjLigue.every(j=>{
+      const k = S.SECOURS_ROSTER.find(x=>x.nom===j.nom);
+      return k && k.ov===j.ov && k.salaire===j.salaire && k.ct===j.ct && k.po===j.po && k.age===j.age;
+    }), 'OV, salaire, contrat, position et âge concordent entre les deux sources');
+  egal(S.ligueNom('DALLAS'), 'Stars de Dallas', 'Nom français d\'une équipe');
+  egal(S.ligueVille('DALLAS'), 'Dallas', 'Ville d\'une équipe');
+  egal(S.ligueVille('PHILLY'), 'Philadelphie', 'Ville de Philadelphie');
+  egal(S.ligueVille('NYRANGERS'), 'New York (Rangers)', 'Les deux clubs new-yorkais restent distincts');
+  egal(S.ligueVille('ISLANDERS'), 'New York (Islanders)', 'Islanders désambiguïsés');
+  egal(S.ligueVille('XYZ'), 'XYZ', 'Code inconnu : renvoyé tel quel');
+  ok(S.LIGUE.every(e=>e.v && e.v.length>2), 'Chaque équipe porte un nom de ville');
+  egal(new Set(S.LIGUE.map(e=>e.v)).size, 32, 'Aucune ville en double dans le menu');
+  egal(S.ligueNom('XYZ'), 'XYZ', 'Code inconnu : renvoyé tel quel');
+  egal(S.ligueJoueurs('XYZ').length, 0, 'Code inconnu : aucune fiche');
+  const f0 = S.ligueFiche(S.LIGUE[0].j[0]);
+  ok(typeof f0.nom==='string' && typeof f0.ov==='number' && typeof f0.ct==='number',
+    'ligueFiche produit un objet joueur typé');
+
+  console.log('— OV estimé des gardiens');
+  egal(S.ovGardien({it:50,sp:50,st:50,en:50,du:50,di:50,sk:50,pa:50,pc:50,ex:50,ld:50}).arrondi, 48,
+    'Ancrage documenté : 50 partout → 48');
+  const gSam = S.SECOURS_ROSTER.find(j=>j.nom==='Ilya Samsonov');
+  egal(S.ovGardien(gSam).arrondi, gSam.ov, 'Samsonov : OV recalculé = OV stocké');
+  const gGru = S.SECOURS_ROSTER.find(j=>j.nom==='Philipp Grubauer');
+  egal(S.ovGardien(gGru).arrondi, gGru.ov, 'Grubauer : OV recalculé = OV stocké');
+  const gIng = S.SECOURS_ROSTER.find(j=>j.nom==='Connor Ingram');
+  egal(S.ovGardien(gIng).arrondi, 78,
+    'Ingram : la formule estimée donne 78 (77,53); ushl.ca publie 77 au relevé du 2 octobre, écart d\'un point documenté');
+  egal(S.ovGardien({it:50,sp:50,st:50,en:50,du:50,di:50,sk:50,pa:50,pc:50,ex:50}), null,
+    'Cote manquante → null');
+  egal(S.OV_ORDRE_G.length, 11, 'Onze cotes utiles pour un gardien (ni DF ni OF)');
+
+  console.log('— Masse et effectif d\'une liste quelconque');
+  const listeTest = [
+    {nom:'A', po:'C', ov:80, age:25, salaire:5000000, ct:2},
+    {nom:'B', po:'D', ov:78, age:30, salaire:3000000, ct:0},            // échu : hors plafond
+    {nom:'C', po:'G', ov:75, age:22, salaire:1000000, ct:1, horsAlignement:true},
+    {nom:'Backup_X', po:'AG', ov:55, age:25, salaire:9000000, ct:1, backup:true}
+  ];
+  egal(S.txMasse(listeTest, {}), 5000000, 'Seuls les contrats actifs de l\'alignement comptent');
+  egal(S.txMasse(listeTest, {b:{salaire:4000000}}), 9000000, 'Un contrat échu prolongé revient au plafond');
+  tableauEgal(S.txEffectif(listeTest), {C:1, AG:0, AD:0, D:1, G:1}, 'Effectif par position, backup exclu');
+  const apres = S.txAppliquer(listeTest, [listeTest[0]], [{nom:'Z', po:'AD', ov:81, age:27, salaire:7000000, ct:3}]);
+  tableauEgal(apres.map(j=>j.nom), ['B','C','Backup_X','Z'], 'txAppliquer retire les partants et ajoute les arrivants');
+
+  console.log('— Bilan d\'un échange');
+  egal(S.txCalculer({partenaire:'', sj:[], part:[]}), null, 'Aucune équipe partenaire : aucun bilan');
+  const vide = S.txCalculer({partenaire:'DALLAS', sj:[], part:[]});
+  ok(vide.vide, 'Échange sans joueur repéré comme vide');
+  egal(vide.sj.masseAvant, ATTENDU.masseSousContrat, 'Masse de départ des Predators');
+  egal(vide.part.masseAvant, 88250000, 'Masse de départ des Stars de Dallas');
+  egal(vide.sj.masseApres, vide.sj.masseAvant, 'Échange vide : masse inchangée');
+
+  // Nashville n'a que 924 700 $ de marge : aucun de ses joueurs n'est assez payé pour
+  // absorber les 15,5 M d'Evan Bouchard dans un un pour un. Le scénario conforme passe
+  // donc par Darnell Nurse (D, OV 84, 10,25 M); Bouchard sert au dépassement plus bas.
+  const ech1 = S.txCalculer({partenaire:'DALLAS', sj:['Tage Thompson'], part:['Darnell Nurse']});
+  egal(ech1.sortSJ.length, 1, 'Un joueur cédé par Nashville');
+  egal(ech1.sortPart.length, 1, 'Un joueur cédé par Dallas');
+  egal(ech1.sj.masseApres, 102700300, 'Nashville : 103 075 300 − 10 625 000 + 10 250 000');
+  egal(ech1.part.masseApres, 88625000, 'Dallas : 88 250 000 − 10 250 000 + 10 625 000');
+  egal(ech1.sj.margeApres, 104000000 - 102700300, 'Marge des Predators après l\'échange');
+  egal(ech1.sj.nApres, ech1.sj.nAvant, 'Un pour un : effectif inchangé');
+  tableauEgal(ech1.sj.effectif, {C:5, AG:3, AD:4, D:10, G:3}, 'Effectif des Predators après l\'échange (club-école compris)');
+  ok(!ech1.sj.depasse && !ech1.part.depasse, 'Les deux équipes restent sous le plafond');
+  ok(ech1.sj.apres.some(j=>j.nom==='Darnell Nurse'), 'Le joueur acquis figure dans l\'effectif des Predators');
+  ok(!ech1.sj.apres.some(j=>j.nom==='Tage Thompson'), 'Le joueur cédé n\'y figure plus');
+
+  const trop = S.txCalculer({partenaire:'DALLAS', sj:[], part:['Evan Bouchard']});
+  egal(trop.sj.masseApres, 118575300, 'Acquisition sèche de 15,5 M : 118 575 300 $');
+  ok(trop.sj.depasse, 'Dépassement du plafond de 104 M$ détecté');
+  ok(!trop.part.depasse, 'Dallas, qui se dégage, reste conforme');
+
+  const nomInconnu = S.txCalculer({partenaire:'DALLAS', sj:['Personne'], part:[]});
+  egal(nomInconnu.sortSJ.length, 0, 'Un nom introuvable est ignoré sans planter');
+
+  console.log('— Avertissements d\'effectif');
+  const avDal = S.txAvertissements(vide.part);
+  ok(avDal.some(a=>a.includes('gardien')), 'Dallas n\'a qu\'un gardien : avertissement');
+  egal(S.txAvertissements(vide.sj).length, 0, 'Nashville : effectif complet, aucun avertissement');
+  const creux = {nom:'Test', effectif:{C:1, AG:1, AD:1, D:2, G:1}};
+  egal(S.txAvertissements(creux).length, 3, 'Trois manques signalés (attaquants, défenseurs, gardiens)');
+
+  console.log('— Comparateur tête-à-tête');
+  tableauEgal(S.TX_COTES.map(c=>c[1]),
+    ['IN','SP','ST','EN','DU','DI','SK','PA','PC','DF','OF','EX','LD'],
+    'Les 13 cotes dans l\'ordre de ushl.ca');
+  tableauEgal(S.TX_COLS_COMP.map(c=>c[1]),
+    ['IN','SP','ST','EN','DU','DI','SK','PA','PC','DF','OF','EX','LD','OV','ÂGE','SALAIRE','CT'],
+    'Colonnes du tableau d\'impact');
+  egal(Object.keys(S.TX_NOMS_COTES).length, 14, 'Un nom long pour chaque cote, OV compris');
+  egal(S.TX_NOMS_COTES.sk, 'Coup de patin', 'Nom long d\'une cote');
+
+  const han = S.SECOURS_ROSTER.find(j=>j.nom==='Noah Hanifin');
+  proche(S.txOvPrecis(han), 81.56, 0.01, 'OV décimal d\'un défenseur');
+  egal(Math.round(S.txOvPrecis(han)), han.ov, 'L\'OV décimal s\'arrondit sur l\'OV affiché');
+  const sams = S.SECOURS_ROSTER.find(j=>j.nom==='Ilya Samsonov');
+  egal(Math.round(S.txOvPrecis(sams)), sams.ov, 'OV décimal d\'un gardien via la formule estimée');
+  egal(S.txOvPrecis(null), null, 'Aucun joueur : aucun OV');
+
+  egal(S.txJoueurDe('NASHVILLE', 'Noah Hanifin').nom, 'Noah Hanifin', 'Joueur retrouvé dans son club');
+  egal(S.txJoueurDe('DALLAS', 'Evan Bouchard').ov, 84, 'Joueur retrouvé chez le partenaire');
+  egal(S.txJoueurDe('DALLAS', 'Noah Hanifin'), null, 'Joueur absent de l\'équipe demandée');
+  egal(S.txJoueurDe('', 'Noah Hanifin'), null, 'Aucune équipe : aucun joueur');
+
+  Object.assign(S.TX_ETAT, {partenaire:'DALLAS', sj:[], part:[]});
+  egal(S.txRoleJoueur('NASHVILLE'), 'sj', 'Un joueur des Predators se cède');
+  egal(S.txRoleJoueur('DALLAS'), 'part', 'Un joueur du partenaire s\'acquiert');
+  egal(S.txRoleJoueur('BOSTON'), null, 'Une équipe tierce n\'entre pas dans l\'échange');
+  S.TX_ETAT.sj = ['Noah Hanifin'];
+  ok(S.txDansEchange('NASHVILLE', 'Noah Hanifin'), 'Joueur déjà dans l\'échange');
+  ok(!S.txDansEchange('NASHVILLE', 'Jesse Puljujarvi'), 'Joueur absent de l\'échange');
+  ok(!S.txDansEchange('BOSTON', 'Noah Hanifin'), 'Hors des deux clubs : jamais dans l\'échange');
+  S.TX_ETAT.sj = [];
+
+  console.log('— Profils, résumé et impact');
+  egal(S.txMoyenneCote([{a:null},{a:80},{a:90}], 'a'), 85, 'Les cotes absentes sont écartées de la moyenne');
+  egal(S.txMoyenneCote([{a:null}], 'a'), null, 'Aucune valeur : moyenne nulle');
+  egal(S.txProfil([]).ov, null, 'Groupe vide : profil sans OV');
+  egal(S.txProfil([]).salaire, null, 'Groupe vide : aucun salaire');
+  const prof = S.txProfil([{it:60, ov:80, age:24, salaire:1000000}, {it:70, ov:82, age:26, salaire:2000000}]);
+  egal(prof.it, 65, 'Moyenne d\'une cote');
+  egal(prof.ov, 81, 'Moyenne d\'OV');
+  egal(prof.salaire, 3000000, 'Somme des salaires');
+  egal(prof.ct, null, 'La colonne contrat n\'a pas de moyenne');
+  egal(S.txEcartProfil({ov:80, age:null}, {ov:83, age:25}).ov, 3, 'Écart entre deux profils');
+  egal(S.txEcartProfil({ov:80, age:null}, {ov:83, age:25}).age, null, 'Valeur absente : écart nul');
+
+  const cmp1 = S.txComparatif(ech1);
+  egal(cmp1.paires.length, 1, 'Thompson contre Nurse : un duel');
+  proche(cmp1.moyCede.ov, 82, 0.001, 'OV du joueur cédé');
+  proche(cmp1.moyAcquis.ov, 84, 0.001, 'OV du joueur acquis');
+  proche(cmp1.ecart.ov, 2, 0.001, 'Écart d\'OV de l\'échange');
+  egal(cmp1.ecart.salaire, 10250000 - 10625000, 'Écart de masse échangée : −375 000 $');
+  const cmpN = S.txComparatif(S.txCalculer({partenaire:'DALLAS', sj:['Noah Hanifin','Henri Jokiharju'], part:['Evan Bouchard']}));
+  proche(cmpN.moyCede.ov, 80.5, 0.001, 'Moyenne d\'OV de deux joueurs cédés');
+  egal(cmpN.moyCede.salaire, 7500000 + 4375000, 'Les salaires s\'additionnent au lieu de se moyenner');
+  const gard = S.txComparatif(S.txCalculer({partenaire:'DALLAS', sj:['Ilya Samsonov'], part:['Evan Bouchard']}));
+  egal(gard.ecart.df, null, 'Gardien contre patineur : DF non comparable');
+
+  const res = S.txResume(ech1);
+  egal(res.length, 2, 'Un résumé par équipe');
+  egal(res[0].nom, 'Predators de Nashville', 'Premier résumé : Nashville');
+  egal(res[1].nom, 'Stars de Dallas', 'Deuxième résumé : le partenaire');
+  egal(res[0].avant.salaire, ATTENDU.masseSousContrat, 'Colonne salaire du résumé = masse au plafond avant');
+  egal(res[0].apres.salaire, 102700300, 'Masse au plafond après l\'échange');
+  proche(res[0].ecart.ov, res[0].apres.ov - res[0].avant.ov, 0.0001, 'Écart d\'OV cohérent avec les deux profils');
+  egal(S.txResume(null).length, 0, 'Aucun bilan : aucun résumé');
+
+  console.log('— Teintes et nombres');
+  ok(S.txTeinte(95).includes('hsl(130'), 'Cote élevée : teinte verte');
+  ok(S.txTeinte(45).includes('hsl(0'), 'Cote faible : teinte rouge');
+  egal(S.txTeinte(null), '', 'Aucune cote : aucune teinte');
+  egal(S.txTeinte(120), S.txTeinte(95), 'Teinte bornée en haut');
+  egal(S.txTeinte(10), S.txTeinte(45), 'Teinte bornée en bas');
+  egal(S.txNombre(81.5, 'ov'), '81,5', 'Décimale à la virgule');
+  egal(S.txNombre(82, 'ov'), '82', 'Entier sans décimale inutile');
+  egal(S.txNombre(null, 'ov'), '—', 'Valeur absente');
+
+  console.log('— Vue Transactions (DOM)');
+  W.localStorage.removeItem('nsh_transac_v1');
+  const btnTx = doc.querySelector('nav button[data-vue="transactions"]');
+  ok(!!btnTx, 'Bouton de navigation «Transactions» présent');
+  ok(!!doc.getElementById('vue-transactions'), 'Section vue-transactions présente');
+  btnTx.click();
+  ok(doc.getElementById('vue-transactions').classList.contains('actif'), 'La vue s\'active au clic');
+  const selTx = doc.getElementById('txEquipe');
+  egal(selTx.options.length, 32, '31 équipes partenaires + le choix vide');
+  ok(!Array.from(selTx.options).some(o=>o.value==='NASHVILLE'), 'Nashville absent de la liste des partenaires');
+  egal(selTx.options[1].textContent, 'Anaheim', 'Le menu ne donne que le nom de la ville');
+  ok(doc.getElementById('txDateFichier').textContent.includes('USHL22.ros'), 'Source du fichier affichée');
+
+  const chg = (id, val) => { const s = doc.getElementById(id); s.value = val; s.dispatchEvent(new W.Event('change')); };
+  chg('txEquipe', 'DALLAS');
+  egal(doc.getElementById('txEqA').options.length, 32, 'Équipe A : les 32 formations');
+  egal(doc.getElementById('txEqA').value, 'NASHVILLE', 'Équipe A par défaut : mon club');
+  egal(doc.getElementById('txEqB').value, 'DALLAS', 'Équipe B suit l\'équipe partenaire');
+  ok(Array.from(doc.getElementById('txEqA').options).some(o=>o.textContent.includes('mon club')),
+    'Nashville est identifié comme mon club');
+  egal(doc.getElementById('txJoA').options.length, ATTENDU.taille, 'Joueur A : tout l\'effectif des Predators (club-école compris)');
+  egal(doc.getElementById('txJoB').options.length, 17, 'Joueur B : tout l\'effectif des Stars');
+  ok(doc.getElementById('txJoA').options[0].textContent.includes('OV '), 'L\'OV figure dans le sélecteur');
+
+  chg('txJoA', 'Tage Thompson');
+  chg('txJoB', 'Darnell Nurse');
+  const fiches = doc.querySelectorAll('#txDuel .duel-fiche');
+  egal(fiches.length, 2, 'Deux fiches de joueur');
+  ok(fiches[0].textContent.includes('Tage Thompson'), 'Fiche A : le joueur choisi');
+  ok(fiches[1].textContent.includes('Darnell Nurse'), 'Fiche B : le joueur choisi');
+  ok(fiches[0].textContent.includes('Nashville'), 'La ville figure sur la fiche');
+  ok(fiches[0].textContent.includes('81,56'), 'OV décimal affiché sur la fiche');
+  ok(fiches[0].textContent.includes('Sniper'), 'Profil USHL affiché sur la fiche');
+  egal(doc.querySelectorAll('#txDuel .duel-ligne').length, 14, '13 cotes plus l\'OV en jauges');
+  const l1 = doc.querySelectorAll('#txDuel .duel-ligne')[0];
+  ok(l1.querySelector('.duel-lbl').textContent.includes('IN'), 'Code court de la cote au centre');
+  ok(l1.querySelector('.duel-lbl').textContent.includes('Intensité'), 'Nom long de la cote au centre');
+  egal(l1.querySelectorAll('.duel-jauge').length, 2, 'Une jauge de chaque côté');
+  ok(l1.querySelector('.duel-jauge.b').classList.contains('gagne'), 'Nurse gagne IN (86 contre 68)');
+  ok(!l1.querySelector('.duel-jauge.a').classList.contains('gagne'), 'Thompson ne gagne pas IN');
+  const lSP = doc.querySelectorAll('#txDuel .duel-ligne')[1];
+  ok(lSP.querySelector('.duel-jauge.a').classList.contains('gagne'), 'Thompson gagne SP (82 contre 76)');
+  ok(doc.querySelector('#txDuel .duel-stats').textContent.length > 0,
+    'Statistiques évaluées du profil rappelées');
+
+  console.log('— Ajout au marché depuis le comparateur');
+  const boutons = () => doc.querySelectorAll('#txDuel button.duel-btn');
+  egal(boutons().length, 2, 'Un bouton sous chaque fiche');
+  ok(boutons()[0].textContent.includes('cédés'), 'Joueur des Predators : ajout aux joueurs cédés');
+  ok(boutons()[1].textContent.includes('reçus'), 'Joueur du partenaire : ajout aux joueurs reçus');
+  boutons()[0].click();
+  boutons()[1].click();
+  tableauEgal(S.litTransac().sj, ['Tage Thompson'], 'Le joueur cédé est enregistré');
+  tableauEgal(S.litTransac().part, ['Darnell Nurse'], 'Le joueur reçu est enregistré');
+  ok(boutons()[0].textContent.includes('Retirer'), 'Le bouton propose ensuite de retirer');
+  ok(boutons()[0].classList.contains('retire'), 'Bouton en mode retrait');
+
+  chg('txEqB', 'BOSTON');
+  egal(doc.querySelectorAll('#txDuel button.duel-btn[disabled]').length, 1,
+    'Un joueur d\'une équipe tierce ne peut pas être ajouté');
+  ok(doc.querySelector('#txDuel .duel-note').textContent.includes('partenaire'),
+    'Le motif du blocage est expliqué');
+  chg('txEqB', 'DALLAS');
+  chg('txJoB', 'Darnell Nurse');
+
+  console.log('— Ce que chaque club met sur la table');
+  const cotes = doc.querySelectorAll('#txEchange .ech-cote');
+  egal(cotes.length, 2, 'Deux colonnes dans le bloc de l\'échange');
+  ok(cotes[0].textContent.includes('Nashville cède'), 'Colonne de Nashville');
+  ok(cotes[1].textContent.includes('Dallas cède'), 'Colonne du partenaire');
+  egal(cotes[0].querySelectorAll('.ech-j').length, 1, 'Un joueur du côté de Nashville');
+  ok(cotes[0].textContent.includes('Tage Thompson'), 'Le joueur cédé y figure');
+  ok(cotes[0].textContent.includes('OV 82'), 'Son OV y figure');
+  ok(cotes[0].querySelector('.ech-total').textContent.includes('10,625 M'), 'Masse cédée par Nashville');
+  ok(cotes[1].querySelector('.ech-total').textContent.includes('10,25 M'), 'Masse cédée par Dallas');
+  cotes[0].querySelector('button.ech-x').click();
+  tableauEgal(S.litTransac().sj, [], 'Le ✕ retire le joueur de l\'échange');
+  ok(doc.querySelectorAll('#txEchange .ech-cote')[0].textContent.includes('Aucun joueur'),
+    'Colonne vide annoncée');
+
+  console.log('— Impact');
+  ok(doc.querySelector('#txVerdict .tx-verdict').classList.contains('refus'),
+    'Acquisition sèche de Darnell Nurse : dépassement refusé');
+  doc.querySelectorAll('#txDuel button.duel-btn')[0].click();
+  ok(!doc.querySelector('#txVerdict .tx-verdict').classList.contains('refus'),
+    'Échange équilibré : plus de refus');
+  egal(doc.querySelectorAll('#txBilan .stat-carte').length, 2, 'Deux cartes de masse');
+  ok(doc.querySelector('#txBilan').textContent.replace(/[\s\u00a0\u202f]/g,'').includes('102700300'),
+    'Masse des Predators après l\'échange : 102 700 300 $');
+  const tab = doc.querySelector('#txComparatif table.tx-tableau');
+  ok(!!tab, 'Tableau d\'impact rendu');
+  egal(tab.querySelectorAll('thead th').length, 1 + S.TX_COLS_COMP.length, 'En-tête : équipe puis les 17 colonnes');
+  egal(tab.querySelectorAll('tbody.tx-paire').length, 3,
+    'Trois blocs : ce qui change de mains, Nashville, le partenaire');
+  ok(tab.textContent.includes('Ce qui change de mains'), 'Bloc de l\'échange');
+  ok(tab.textContent.includes('Predators de Nashville'), 'Bloc de Nashville');
+  ok(tab.textContent.includes('Stars de Dallas'), 'Bloc du partenaire');
+  ok(tab.querySelectorAll('tr.tx-r-moy td[style*="hsl"]').length >= 13, 'Les moyennes sont teintées');
+  ok(doc.querySelectorAll('#txComparatif td.tx-ecart.gain').length > 0, 'Au moins un gain coloré');
+  ok(doc.querySelectorAll('#txComparatif td.tx-ecart.perte').length > 0, 'Au moins une perte colorée');
+  ok(doc.querySelectorAll('#txComparatif td.tx-ecart.tx-neutre').length >= 3,
+    'Âge, salaire et contrat restent neutres');
+
+  const som = S.txSommaireTexte(S.txCalculer(S.TX_ETAT));
+  ok(som.includes('Tage Thompson') && som.includes('Darnell Nurse'), 'Le sommaire nomme les deux joueurs');
+  ok(som.includes('Stars de Dallas'), 'Le sommaire nomme l\'équipe partenaire');
+  egal(S.txSommaireTexte(null), '', 'Aucun bilan : sommaire vide');
+
+  doc.getElementById('txVider').click();
+  tableauEgal(S.litTransac().sj, [], 'Le bouton Vider remet l\'échange à zéro');
+  tableauEgal(S.litTransac().part, [], 'Les deux côtés sont vidés');
+  ok(doc.querySelector('#txVerdict').textContent.includes('Aucun joueur'), 'Verdict revenu à l\'état vide');
+  egal(doc.getElementById('txEqB').value, 'DALLAS', 'Le comparateur garde son équipe après le vidage');
+
+
+  /* ============ ALIMENTATION LOCALE (data/rosters.json) ============ */
+  console.log('— Chargement du fichier produit par l\'Action');
+  {
+    const refJ = S.SECOURS_ROSTER.map(j=>({...j}));
+    const charge = {
+      maj: 'test 1 2026',
+      equipes: {
+        [S.CONFIG.equipe]: {
+          fiche: S.CONFIG.equipe + ' 9-1-0',
+          joueurs: refJ.map((j,i)=> i===0 ? {...j, ov: j.ov, nom: j.nom} : j)
+        }
+      }
+    };
+    egal(typeof S.appliquerRosters, 'function', 'appliquerRosters exposée');
+    egal(S.appliquerRosters(null), null, 'Charge nulle : rien appliqué');
+    egal(S.appliquerRosters({}), null, 'Charge sans « equipes » : rien appliqué');
+    egal(S.appliquerRosters({equipes:{}}), 0, 'Aucune équipe connue : 0 remplacement');
+
+    // charge tronquée : sous le seuil de 10 joueurs, on ne touche à rien
+    const avant = S.ETAT.roster.length;
+    egal(S.appliquerRosters({equipes:{[S.CONFIG.equipe]:{joueurs:[{nom:'Bidon',ov:50}]}}}), 0,
+      'Équipe sous le seuil : ignorée');
+    egal(S.ETAT.roster.length, avant, 'Roster inchangé après une charge tronquée');
+    ok(S.ETAT.roster.every(j=>j.nom!=='Bidon'), 'Aucun joueur bidon injecté');
+
+    // charge valide
+    const n = S.appliquerRosters(charge);
+    ok(n >= 1, 'Au moins une équipe remplacée');
+    egal(S.ETAT.fiche, S.CONFIG.equipe + ' 9-1-0', 'Fiche reprise de la charge');
+    ok(S.ETAT.source.includes('ushl.ca'), 'Source signalée comme venant de ushl.ca');
+    ok(S.ETAT.roster.every(j=>j._profil), 'Profils recalculés après application');
+    egal(S.ligueJoueurs(S.CONFIG.equipe).length,
+      refJ.filter(j=>!j.horsAlignement).length, 'Bloc LIGUE du club synchronisé');
+    egal(S.LIGUE.length, 32, 'Les 32 formations sont conservées');
+    {
+      const vus = new Set(); let doubles = 0;
+      S.LIGUE.forEach(e=>e.j.forEach(t=>{ if(vus.has(t[0])) doubles++; vus.add(t[0]); }));
+      egal(doubles, 0, 'Aucun joueur en double après application');
+    }
+    ok(S.LIGUE.every(e=>e.j.every(t=>t.length===S.LIGUE_COLS.length)),
+      'Fiches compactes toujours au bon nombre de colonnes');
+
+    // remise en état pour la suite du harnais
+    S.ETAT.roster = refJ.map(j=>({...j}));
+    S.preparerRoster();
+  }
+
+
+  /* ============ IDENTITÉ DE L'INTERFACE ============ */
+  console.log('— Identité visuelle du club');
+  {
+    const nomClub = S.ligueNom(S.CONFIG.equipe);
+    const villeClub = S.ligueVille(S.CONFIG.equipe);
+    const h1 = doc.querySelector('header h1');
+    ok(!!h1, 'Titre principal présent dans l\'en-tête');
+    egal(h1.textContent.toUpperCase().includes(nomClub.toUpperCase()), true,
+      'Le titre affiché nomme le club : ' + nomClub);
+    ok(doc.title.includes(nomClub), 'La balise <title> nomme le club');
+    const logo = doc.querySelector('header img.logo');
+    ok(!!logo, 'Logo présent');
+    egal(logo.getAttribute('alt'), nomClub, 'Texte alternatif du logo = nom du club');
+    ok(logo.getAttribute('src').toLowerCase().includes(S.CONFIG.equipe.toLowerCase().replace('.','')),
+      'Le fichier du logo correspond au code de l\'équipe');
+
+    /* Aucune trace d'un autre club dans l'en-tête : c'est le piège des portages,
+       où seule la casse d'origine avait été remplacée. */
+    const entete = doc.querySelector('header').textContent.toUpperCase();
+    for (const e of S.LIGUE){
+      if (e.c === S.CONFIG.equipe) continue;
+      ok(!entete.includes(e.n.toUpperCase()),
+        'L\'en-tête ne mentionne pas ' + e.n);
+    }
+    ok(villeClub.length > 1, 'Ville du club connue : ' + villeClub);
+  }
+
+  console.log(`\n${total - echecs}/${total} vérifications réussies`);
+  process.exit(echecs ? 1 : 0);
+})().catch(e => { console.error('ERREUR FATALE', e); process.exit(1); });

@@ -1,39 +1,39 @@
 {
- "genere": "2026-11-26T09:01:33.752Z",
+ "genere": "2026-11-28T11:38:24.351Z",
  "equipe": "NASHVILLE",
- "fiche": "NASHVILLE 8-10-2",
+ "fiche": "NASHVILLE 8-11-2",
  "pointage": {
-  "releve": "2026-11-26T09:01:33.752Z",
+  "releve": "2026-11-28T11:38:24.351Z",
   "patineurs": [
    {
     "nom": "Matthew Coronato",
-    "gp": 20,
+    "gp": 21,
     "goals": 10,
     "assists": 13,
     "pts": 23,
-    "plusminus": -1,
-    "pim": 10,
+    "plusminus": -3,
+    "pim": 12,
     "ppg": 2,
     "gwg": 2,
     "shots": 59,
-    "hits": 27
+    "hits": 29
    },
    {
     "nom": "Jesse Puljujarvi",
-    "gp": 20,
+    "gp": 21,
     "goals": 9,
     "assists": 11,
     "pts": 20,
-    "plusminus": 0,
+    "plusminus": -2,
     "pim": 22,
     "ppg": 0,
     "gwg": 1,
-    "shots": 60,
+    "shots": 63,
     "hits": 18
    },
    {
     "nom": "Kevin Labanc",
-    "gp": 20,
+    "gp": 21,
     "goals": 7,
     "assists": 13,
     "pts": 20,
@@ -41,38 +41,38 @@
     "pim": 10,
     "ppg": 2,
     "gwg": 1,
-    "shots": 52,
-    "hits": 25
+    "shots": 53,
+    "hits": 27
    },
    {
     "nom": "Tage Thompson",
-    "gp": 20,
+    "gp": 21,
     "goals": 6,
     "assists": 11,
     "pts": 17,
-    "plusminus": 0,
+    "plusminus": -2,
     "pim": 40,
     "ppg": 1,
     "gwg": 1,
-    "shots": 38,
+    "shots": 42,
     "hits": 12
    },
    {
     "nom": "Noah Hanifin",
-    "gp": 20,
+    "gp": 21,
     "goals": 4,
     "assists": 12,
     "pts": 16,
-    "plusminus": 6,
+    "plusminus": 4,
     "pim": 8,
     "ppg": 1,
     "gwg": 0,
     "shots": 33,
-    "hits": 34
+    "hits": 36
    },
    {
     "nom": "Yegor Sharangovich",
-    "gp": 20,
+    "gp": 21,
     "goals": 9,
     "assists": 6,
     "pts": 15,
@@ -80,38 +80,38 @@
     "pim": 6,
     "ppg": 1,
     "gwg": 1,
-    "shots": 44,
+    "shots": 45,
     "hits": 27
    },
    {
     "nom": "Mavrik Bourque",
-    "gp": 20,
+    "gp": 21,
     "goals": 5,
     "assists": 8,
     "pts": 13,
-    "plusminus": 0,
+    "plusminus": -2,
     "pim": 13,
     "ppg": 2,
     "gwg": 1,
-    "shots": 54,
-    "hits": 28
+    "shots": 56,
+    "hits": 31
    },
    {
     "nom": "Rasmus Kupari",
-    "gp": 20,
+    "gp": 21,
     "goals": 5,
     "assists": 7,
     "pts": 12,
-    "plusminus": -4,
+    "plusminus": -6,
     "pim": 4,
     "ppg": 2,
     "gwg": 1,
-    "shots": 29,
-    "hits": 8
+    "shots": 31,
+    "hits": 9
    },
    {
     "nom": "Anthony Duclair",
-    "gp": 20,
+    "gp": 21,
     "goals": 4,
     "assists": 8,
     "pts": 12,
@@ -120,24 +120,24 @@
     "ppg": 1,
     "gwg": 0,
     "shots": 42,
-    "hits": 29
+    "hits": 31
    },
    {
     "nom": "Vladislav Gavrikov",
-    "gp": 20,
+    "gp": 21,
     "goals": 2,
     "assists": 7,
     "pts": 9,
-    "plusminus": 2,
-    "pim": 10,
+    "plusminus": 1,
+    "pim": 12,
     "ppg": 0,
     "gwg": 0,
-    "shots": 24,
-    "hits": 36
+    "shots": 28,
+    "hits": 40
    },
    {
     "nom": "Christian Dvorak",
-    "gp": 17,
+    "gp": 18,
     "goals": 4,
     "assists": 4,
     "pts": 8,
@@ -145,8 +145,8 @@
     "pim": 2,
     "ppg": 1,
     "gwg": 0,
-    "shots": 20,
-    "hits": 9
+    "shots": 21,
+    "hits": 10
    },
    {
     "nom": "Samuel Bolduc",
@@ -163,7 +163,7 @@
    },
    {
     "nom": "Jared Spurgeon",
-    "gp": 20,
+    "gp": 21,
     "goals": 1,
     "assists": 6,
     "pts": 7,
@@ -172,11 +172,11 @@
     "ppg": 0,
     "gwg": 0,
     "shots": 24,
-    "hits": 13
+    "hits": 14
    },
    {
     "nom": "Nazem Kadri",
-    "gp": 16,
+    "gp": 17,
     "goals": 2,
     "assists": 4,
     "pts": 6,
@@ -184,25 +184,25 @@
     "pim": 6,
     "ppg": 0,
     "gwg": 0,
-    "shots": 17,
-    "hits": 11
+    "shots": 18,
+    "hits": 12
    },
    {
     "nom": "Carson Lambos",
-    "gp": 20,
+    "gp": 21,
     "goals": 0,
     "assists": 5,
     "pts": 5,
-    "plusminus": -6,
-    "pim": 4,
+    "plusminus": -9,
+    "pim": 6,
     "ppg": 0,
     "gwg": 0,
-    "shots": 16,
-    "hits": 35
+    "shots": 18,
+    "hits": 36
    },
    {
     "nom": "Jesse Pulkkinen",
-    "gp": 17,
+    "gp": 18,
     "goals": 1,
     "assists": 3,
     "pts": 4,
@@ -210,38 +210,38 @@
     "pim": 0,
     "ppg": 0,
     "gwg": 0,
-    "shots": 12,
-    "hits": 21
+    "shots": 14,
+    "hits": 24
    },
    {
     "nom": "Henri Jokiharju",
-    "gp": 20,
+    "gp": 21,
     "goals": 1,
     "assists": 3,
     "pts": 4,
-    "plusminus": -4,
+    "plusminus": -6,
     "pim": 12,
     "ppg": 0,
     "gwg": 0,
     "shots": 31,
-    "hits": 24
+    "hits": 25
    },
    {
     "nom": "Michael B-Nygard",
-    "gp": 15,
+    "gp": 16,
     "goals": 0,
     "assists": 3,
     "pts": 3,
-    "plusminus": -4,
-    "pim": 35,
+    "plusminus": -6,
+    "pim": 37,
     "ppg": 0,
     "gwg": 0,
-    "shots": 14,
-    "hits": 15
+    "shots": 16,
+    "hits": 19
    },
    {
     "nom": "Anthony Beauvillier",
-    "gp": 16,
+    "gp": 17,
     "goals": 0,
     "assists": 2,
     "pts": 2,
@@ -249,7 +249,7 @@
     "pim": 2,
     "ppg": 0,
     "gwg": 0,
-    "shots": 12,
+    "shots": 13,
     "hits": 9
    },
    {
@@ -293,21 +293,21 @@
    },
    {
     "nom": "Ilya Samsonov",
-    "gp": 19,
+    "gp": 20,
     "pim": 0,
     "w": 8,
-    "l": 8,
+    "l": 9,
     "t": 1,
-    "avg": 3.72,
-    "svpct": 0.875,
+    "avg": 3.73,
+    "svpct": 0.873,
     "so": 0,
-    "mp": 1017
+    "mp": 1077
    }
   ]
  },
  "xtra": {
-  "releve": "2026-11-26T09:01:33.752Z",
-  "date": "11/26/2026",
+  "releve": "2026-11-28T11:38:24.351Z",
+  "date": "11/28/2026",
   "joueurs": [
    {
     "nom": "Aidan Hreschuk",
@@ -324,50 +324,50 @@
    {
     "nom": "Anthony Beauvillier",
     "pos": "C",
-    "gp": 16,
+    "gp": 17,
     "goals": 0,
     "assists": 2,
     "pts": 2,
-    "shots": 12,
+    "shots": 13,
     "pim": 2,
-    "mp": 139,
+    "mp": 153,
     "hits": 9
    },
    {
     "nom": "Anthony Duclair",
     "pos": "LW",
-    "gp": 20,
+    "gp": 21,
     "goals": 4,
     "assists": 8,
     "pts": 12,
     "shots": 42,
     "pim": 2,
-    "mp": 374,
-    "hits": 29
+    "mp": 384,
+    "hits": 31
    },
    {
     "nom": "Carson Lambos",
     "pos": "D",
-    "gp": 20,
+    "gp": 21,
     "goals": 0,
     "assists": 5,
     "pts": 5,
-    "shots": 16,
-    "pim": 4,
-    "mp": 337,
-    "hits": 35
+    "shots": 18,
+    "pim": 6,
+    "mp": 359,
+    "hits": 36
    },
    {
     "nom": "Christian Dvorak",
     "pos": "RW",
-    "gp": 17,
+    "gp": 18,
     "goals": 4,
     "assists": 4,
     "pts": 8,
-    "shots": 20,
+    "shots": 21,
     "pim": 2,
-    "mp": 155,
-    "hits": 9
+    "mp": 163,
+    "hits": 10
    },
    {
     "nom": "Connor Ingram",
@@ -386,19 +386,19 @@
    {
     "nom": "Henri Jokiharju",
     "pos": "D",
-    "gp": 20,
+    "gp": 21,
     "goals": 1,
     "assists": 3,
     "pts": 4,
     "shots": 31,
     "pim": 12,
-    "mp": 395,
-    "hits": 24
+    "mp": 416,
+    "hits": 25
    },
    {
     "nom": "Ilya Samsonov",
     "pos": "G",
-    "gp": 19,
+    "gp": 20,
     "goals": 0,
     "assists": 0,
     "pts": 0,
@@ -412,110 +412,110 @@
    {
     "nom": "Jared Spurgeon",
     "pos": "D",
-    "gp": 20,
+    "gp": 21,
     "goals": 1,
     "assists": 6,
     "pts": 7,
     "shots": 24,
     "pim": 28,
-    "mp": 223,
-    "hits": 13
+    "mp": 236,
+    "hits": 14
    },
    {
     "nom": "Jesse Puljujarvi",
     "pos": "RW",
-    "gp": 20,
+    "gp": 21,
     "goals": 9,
     "assists": 11,
     "pts": 20,
-    "shots": 60,
+    "shots": 63,
     "pim": 22,
-    "mp": 431,
+    "mp": 453,
     "hits": 18
    },
    {
     "nom": "Jesse Pulkkinen",
     "pos": "D",
-    "gp": 17,
+    "gp": 18,
     "goals": 1,
     "assists": 3,
     "pts": 4,
-    "shots": 12,
+    "shots": 14,
     "pim": 0,
-    "mp": 191,
-    "hits": 21
+    "mp": 209,
+    "hits": 24
    },
    {
     "nom": "Kevin Labanc",
     "pos": "LW",
-    "gp": 20,
+    "gp": 21,
     "goals": 7,
     "assists": 13,
     "pts": 20,
-    "shots": 52,
+    "shots": 53,
     "pim": 10,
-    "mp": 379,
-    "hits": 25
+    "mp": 392,
+    "hits": 27
    },
    {
     "nom": "Matthew Coronato",
     "pos": "RW",
-    "gp": 20,
+    "gp": 21,
     "goals": 10,
     "assists": 13,
     "pts": 23,
     "shots": 59,
-    "pim": 10,
-    "mp": 416,
-    "hits": 27
+    "pim": 12,
+    "mp": 435,
+    "hits": 29
    },
    {
     "nom": "Mavrik Bourque",
     "pos": "C",
-    "gp": 20,
+    "gp": 21,
     "goals": 5,
     "assists": 8,
     "pts": 13,
-    "shots": 54,
+    "shots": 56,
     "pim": 13,
-    "mp": 393,
-    "hits": 28
+    "mp": 411,
+    "hits": 31
    },
    {
     "nom": "Michael B-Nygard",
     "pos": "RW",
-    "gp": 15,
+    "gp": 16,
     "goals": 0,
     "assists": 3,
     "pts": 3,
-    "shots": 14,
-    "pim": 35,
-    "mp": 180,
-    "hits": 15
+    "shots": 16,
+    "pim": 37,
+    "mp": 197,
+    "hits": 19
    },
    {
     "nom": "Nazem Kadri",
     "pos": "C",
-    "gp": 16,
+    "gp": 17,
     "goals": 2,
     "assists": 4,
     "pts": 6,
-    "shots": 17,
+    "shots": 18,
     "pim": 6,
-    "mp": 182,
-    "hits": 11
+    "mp": 187,
+    "hits": 12
    },
    {
     "nom": "Noah Hanifin",
     "pos": "D",
-    "gp": 20,
+    "gp": 21,
     "goals": 4,
     "assists": 12,
     "pts": 16,
     "shots": 33,
     "pim": 8,
-    "mp": 371,
-    "hits": 34
+    "mp": 393,
+    "hits": 36
    },
    {
     "nom": "Philipp Grubauer",
@@ -534,14 +534,14 @@
    {
     "nom": "Rasmus Kupari",
     "pos": "LW",
-    "gp": 20,
+    "gp": 21,
     "goals": 5,
     "assists": 7,
     "pts": 12,
-    "shots": 29,
+    "shots": 31,
     "pim": 4,
-    "mp": 258,
-    "hits": 8
+    "mp": 277,
+    "hits": 9
    },
    {
     "nom": "Samuel Bolduc",
@@ -558,37 +558,37 @@
    {
     "nom": "Tage Thompson",
     "pos": "C",
-    "gp": 20,
+    "gp": 21,
     "goals": 6,
     "assists": 11,
     "pts": 17,
-    "shots": 38,
+    "shots": 42,
     "pim": 40,
-    "mp": 356,
+    "mp": 371,
     "hits": 12
    },
    {
     "nom": "Vladislav Gavrikov",
     "pos": "D",
-    "gp": 20,
+    "gp": 21,
     "goals": 2,
     "assists": 7,
     "pts": 9,
-    "shots": 24,
-    "pim": 10,
-    "mp": 438,
-    "hits": 36
+    "shots": 28,
+    "pim": 12,
+    "mp": 463,
+    "hits": 40
    },
    {
     "nom": "Yegor Sharangovich",
     "pos": "LW",
-    "gp": 20,
+    "gp": 21,
     "goals": 9,
     "assists": 6,
     "pts": 15,
-    "shots": 44,
+    "shots": 45,
     "pim": 6,
-    "mp": 382,
+    "mp": 394,
     "hits": 27
    }
   ]
